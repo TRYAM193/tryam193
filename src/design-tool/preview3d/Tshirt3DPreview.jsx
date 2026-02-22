@@ -207,7 +207,7 @@ export default function Tshirt3DPreview({ modelUrl, textures, color = "#ffffff" 
         <CameraRig z={cameraZ} />
         <Center>
           <DynamicModel
-            modelUrl={modelUrl}
+            modelUrl={'/assets/t-shirt.glb'}
             textures={textures}
             color={color}
             frontPos={frontPos}

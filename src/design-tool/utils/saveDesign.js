@@ -36,6 +36,37 @@ export const uploadToStorage = async (imgURL, fileLocation) => {
   return await getDownloadURL(storageRef);
 };
 
+// --- HELPER: Auto-Generate Lightweight Proxy ---
+const generateProxyImage = async (imgSrc, maxWidth = 500) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      // If the image is already small, return it as-is
+      if (img.width <= maxWidth) {
+        resolve({ url: imgSrc, width: img.width, height: img.height });
+        return;
+      }
+
+      const scale = maxWidth / img.width;
+      const canvas = document.createElement("canvas");
+      canvas.width = maxWidth;
+      canvas.height = img.height * scale;
+
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      // Return the new data URL AND the new physical dimensions
+      resolve({
+        url: canvas.toDataURL("image/webp", 0.8),
+        width: canvas.width,
+        height: canvas.height
+      });
+    };
+    img.src = imgSrc;
+  });
+};
+
 
 const dataURLtoBlob = (dataURL) => {
   const arr = dataURL.split(',');
@@ -246,28 +277,45 @@ export const saveGlobalTemplate = async (canvas, name, category = "General", obj
     const modifiedObjects = await Promise.all(
       objects.map(async (obj, i) => {
         if (obj.type !== "image") {
-          return { ...obj }
+          return { ...obj };
         }
 
-        const objSRC = obj.props?.src
+        const objSRC = obj.props?.src;
         if (!objSRC) {
-          return { ...obj }
+          return { ...obj };
         }
 
-        const storedURL = await uploadToStorage(
-          objSRC,
-          `${mainLoc}/image-${i + 1}`
-        )
+        // A. Upload the ORIGINAL massive image for the backend renderer
+        const highResURL = await uploadToStorage(objSRC, `${mainLoc}/image-${i + 1}-highres`);
 
+        // B. Generate proxy and get its exact new dimensions
+        const proxyData = await generateProxyImage(objSRC, 500);
+        const proxyURL = await uploadToStorage(proxyData.url, `${mainLoc}/image-${i + 1}-proxy`);
+
+        // C. THE MATH FIX: Calculate the ratio difference
+        const originalWidth = obj.props.width;
+        const originalHeight = obj.props.height;
+        const widthRatio = originalWidth / proxyData.width;
+        const heightRatio = originalHeight / proxyData.height;
+
+        // D. Save the mathematically adjusted object
         return {
           ...obj,
           props: {
             ...obj.props,
-            src: storedURL
+            src: proxyURL,
+            print_src: highResURL,
+            originalWidth: originalWidth,
+            originalHeight: originalWidth, 
+            width: proxyData.width,
+            height: proxyData.height,
+            scaleX: obj.props.scaleX * widthRatio,
+            scaleY: obj.props.scaleY * heightRatio,
+            canvasBackground: canvas?.backgroundColor || 'white'
           }
-        }
+        };
       })
-    )
+    );
 
 
     const templateData = {

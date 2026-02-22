@@ -433,6 +433,9 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
             <div className="flex items-center justify-center px-2">
               <input type="color" className="w-5 h-5 rounded cursor-pointer bg-transparent border-none p-0" value={liveProps.fill || '#000000'} onChange={(e) => handleColorChange('fill', e.target.value)} />
             </div>
+            <button onClick={() => updateObject(id, {textAlign: 'right'})}>
+              text align right
+            </button>
           </div>
 
           {/* Text Effects Pills */}

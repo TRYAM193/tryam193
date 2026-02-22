@@ -90,6 +90,8 @@ export default function EditorPanel() {
     const [colors, setColors] = useState([])
     const [sizes, setSizes] = useState([])
 
+    const [isAdmin, setIsAdmin] = useState(false);
+
     const urlRegion = searchParams.get('region') || 'IN';
 
     const [productData, setProductData] = useState(false);
@@ -111,8 +113,8 @@ export default function EditorPanel() {
     useEffect(() => { viewStatesRef.current = viewStates; }, [viewStates]);
     useEffect(() => {
         if (!fabricCanvas) return
-        setTimeout(() => fabricCanvas.backgroundColor = canvasBg, 500)
-    }, [urlColor])
+        setTimeout(() => fabricCanvas.backgroundColor = canvasBg, 1000)
+    }, [canvasBg])
 
     const [designTextures, setDesignTextures] = useState({
         front: { blob: null, url: null },
@@ -150,7 +152,6 @@ export default function EditorPanel() {
     //DPI Calucator
     const updateDpiForObject = (obj) => {
         if (!obj || obj.type !== 'image') return;
-
         // Get Print Area for current view (e.g. Front)
         const printArea = productData?.print_areas?.[currentView] || { width: 4500, height: 5400 };
 
@@ -404,6 +405,8 @@ export default function EditorPanel() {
                     if (templateData.canvasData) {
                         dispatch(setCanvasObjects(templateData.canvasData));
                     }
+
+                    setCanvasBg(templateData.canvasBackground)
 
                     // C. Detach from the template (treat as new design)
                     setEditingDesignId(null);
@@ -749,7 +752,7 @@ export default function EditorPanel() {
         setViewStates(prev => ({ ...prev, [currentView]: currentReduxState }));
 
         // 2. ✅ NEW: Capture Full Canvas JSON (For Headless Render)
-        const currentJSON = fabricCanvas.toObject(['customId', 'textStyle', 'textEffect', 'radius', 'effectValue', 'selectable', 'lockMovementX', 'lockMovementY']);
+        const currentJSON = fabricCanvas.toObject(['customId', 'textStyle', 'textEffect', 'radius', 'effectValue', 'selectable', 'lockMovementX', 'lockMovementY', 'print_src', 'originalWidth', 'originalHeight']);
         let currentObjects = currentJSON.objects || [];
         currentObjects = currentObjects.map((obj) => removeUndefined(obj))
         setCanvasViewStates(prev => ({ ...prev, [currentView]: currentObjects }));
@@ -769,6 +772,25 @@ export default function EditorPanel() {
             fabricCanvas.requestRenderAll();
         }
     };
+
+    useEffect(() => {
+        const checkAdmin = async () => {
+            if (!user) {
+                setIsAdmin(false);
+                return;
+            }
+            try {
+                // Force refresh to get latest claims
+                const tokenResult = await user.getIdTokenResult();
+                setIsAdmin(!!tokenResult.claims.admin);
+            } catch (e) {
+                console.error("Admin check failed", e);
+                setIsAdmin(false);
+            }
+        };
+
+        checkAdmin();
+    }, [user]);
 
     const handleGeneratePreview = () => {
         if (!fabricCanvas) return;
@@ -793,7 +815,7 @@ export default function EditorPanel() {
         // 2. ✅ NEW: Snapshot CURRENT Fabric JSON (For Headless Render)
         let currentObjects = [];
         if (fabricCanvas) {
-            const json = fabricCanvas.toObject(['customId', 'textStyle', 'textEffect', 'radius', 'effectValue', 'selectable', 'lockMovementX', 'lockMovementY']);
+            const json = fabricCanvas.toObject(['customId', 'textStyle', 'textEffect', 'radius', 'effectValue', 'selectable', 'lockMovementX', 'lockMovementY', 'print_src', 'originalWidth', 'originalHeight']);
             currentObjects = json.objects || [];
             currentObjects = currentObjects.map((obj) => removeUndefined(obj))
         }
@@ -806,10 +828,15 @@ export default function EditorPanel() {
             return Promise.all(
                 objects.map(async (obj) => {
                     if (obj.type.toLowerCase() !== 'image') return obj;
-
                     if (!obj.src) return obj;
 
-                    const imgSrc = await uploadToStorage(obj.src, `images/${Date.now()}`);
+                    const isLocalImage = obj.src.startsWith('blob:') || obj.src.startsWith('data:');
+
+                    if (!isLocalImage) {
+                        return obj;
+                    }
+
+                    const imgSrc = await uploadToStorage(obj.src, `images/${Date.now()}_${uuidv4()}`);
 
                     return {
                         ...obj,
@@ -924,6 +951,7 @@ export default function EditorPanel() {
                         urlColor={urlColor || currentDesign?.productConfig?.variantColor}
                         urlSize={urlSize || currentDesign?.productConfig?.variantSize}
                         dpiIssues={dpiIssuesList}
+                        isAdmin={isAdmin}
                     />
 
                     {/* Conditional Check */}

@@ -8,11 +8,11 @@ import {
     FiBell, FiAlertTriangle, FiCheckCircle, FiInfo, FiX, FiZap
 } from 'react-icons/fi';
 import { Loader2, Sparkles, ImagePlusIcon, Layout } from 'lucide-react'; // 👈 Import Loader
-
+import Image from '../objectAdders/Image'
 
 export default function MainToolbar({
     activePanel, onSelectTool, setSelectedId, setActiveTool,
-    navigation, brandDisplay, fabricCanvas, productId,
+    isAdmin, brandDisplay, fabricCanvas, productId,
     urlColor, urlSize, dpiIssues = []
 }) {
 
@@ -32,10 +32,36 @@ export default function MainToolbar({
     const [isFixing, setIsFixing] = useState(null); // 👈 Track fixing state
     const bellRef = useRef(null);
     const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
+    const fileInput = useRef(null)
 
     // ... (Keep existing handlers for Saved Designs, togglePopup, clickOutside) ...
 
     const handleSavedDesignsClick = () => onSelectTool('saved');
+
+    const handleClick = () => {
+        fileInput.current.click();
+    };
+
+    const handleImage = (event) => {
+        const file = event.target.files[0];
+
+        if (file && file.type.substring(0, 5) === 'image') {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                const src = e.target.result;
+
+                if (src) {
+                    Image(src, setSelectedId, setActiveTool, fabricCanvas);
+                }
+            };
+
+            reader.readAsDataURL(file);
+        }
+        
+        event.target.result = ''
+
+    }
 
     const togglePopup = () => {
         if (!showQualityDetails && bellRef.current) {
@@ -123,12 +149,19 @@ export default function MainToolbar({
             <ImageHandler setSelectedId={setSelectedId} setActiveTool={onSelectTool} className={`tool-button-wrapper ${activePanel === 'image' ? 'active' : ''}`} fabricCanvas={fabricCanvas}>
                 <ImagePlusIcon size={24} /> <span>Image</span>
             </ImageHandler>
+            {isAdmin && (  // Check if current user is you/admin
+                <button onClick={handleClick}>
+                    <ImagePlusIcon size={24} />
+                    <input type="file" ref={fileInput} onChange={handleImage} style={{ display: 'none' }} accept="image/*" />
+                    <span>Admin Image</span>
+                </button>
+            )}
             <ToolButton icon={FiSquare} label="Shapes" isActive={activePanel === 'shapes'} onClick={() => onSelectTool('shapes')} />
-            <ToolButton icon={Layout} label='Templates' isActive={activePanel === 'templates'} onClick={() => onSelectTool('templates')}/>
+            <ToolButton icon={Layout} label='Templates' isActive={activePanel === 'templates'} onClick={() => onSelectTool('templates')} />
             <ToolButton icon={FiCpu} label="AI" isActive={activePanel === 'ai'} onClick={() => onSelectTool('ai')} />
             <hr className="toolbar-divider" />
             <ToolButton icon={FiTool} label="More" isActive={activePanel === 'more'} onClick={() => onSelectTool('more')} />
-            
+
 
             <div className="flex-grow" />
 

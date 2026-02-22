@@ -22,7 +22,7 @@ fabric.Object.prototype.toObject = (function (toObject) {
       this,
       (propertiesToInclude || []).concat([
         'customId', 'textStyle', 'textEffect', 'radius', 'effectValue',
-        'selectable', 'lockMovementX', 'lockMovementY'
+        'selectable', 'lockMovementX', 'lockMovementY', 'print_src', 'originalWidth', 'originalHeight'
       ])
     );
   };
@@ -505,22 +505,22 @@ export default function CanvasEditor({
             // 2. Read the "Trust Fabric" values directly from the child
             //    (No complex matrix math needed anymore)
 
-            if (child.type === 'text' || child.type === 'textbox' || child.customType === 'text') {
-              // For text, we normalize scale into fontSize
-              const newFontSize = child.fontSize * child.scaleX;
-              child.set({ fontSize: newFontSize, scaleX: 1, scaleY: 1 });
-              child.setCoords();
+            // if (child.type === 'text' || child.type === 'textbox' || child.customType === 'text') {
+            //   // For text, we normalize scale into fontSize
+            //   const newFontSize = child.fontSize * child.scaleX;
+            //   child.set({ fontSize: newFontSize, scaleX: 1, scaleY: 1 });
+            //   child.setCoords();
 
-              updatedPresent[index].props = {
-                ...updatedPresent[index].props,
-                fontSize: newFontSize,
-                left: child.left,
-                top: child.top,
-                angle: child.angle,
-                scaleX: 1,
-                scaleY: 1
-              };
-            } else {
+            //   updatedPresent[index].props = {
+            //     ...updatedPresent[index].props,
+            //     fontSize: newFontSize,
+            //     left: child.left,
+            //     top: child.top,
+            //     angle: child.angle,
+            //     scaleX: 1,
+            //     scaleY: 1
+            //   };
+            // } else {
               updatedPresent[index].props = {
                 ...updatedPresent[index].props,
                 left: child.left,
@@ -531,7 +531,7 @@ export default function CanvasEditor({
                 width: child.width,
                 height: child.height
                 // Note: Do not force width/height updates here unless necessary
-              };
+              // };
             }
             hasChanges = true;
           });
@@ -553,19 +553,19 @@ export default function CanvasEditor({
         return;
       }
 
-      if (type === 'text' || type === 'textbox') {
-        const newFontSize = obj.fontSize * obj.scaleX;
-        obj.set({ fontSize: newFontSize, scaleX: 1, scaleY: 1 });
-        obj.setCoords();
-        fabricCanvas.renderAll();
-        updateObject(obj.customId, {
-          fontSize: newFontSize,
-          left: obj.left,
-          top: obj.top,
-          angle: obj.angle,
-        });
-        return;
-      }
+      // if (type === 'text' || type === 'textbox') {
+      //   const newFontSize = obj.fontSize * obj.scaleX;
+      //   obj.set({ fontSize: newFontSize, scaleX: 1, scaleY: 1 });
+      //   obj.setCoords();
+      //   fabricCanvas.renderAll();
+      //   updateObject(obj.customId, {
+      //     fontSize: newFontSize,
+      //     left: obj.left,
+      //     top: obj.top,
+      //     angle: obj.angle,
+      //   });
+      //   return;
+      // }
 
       updateObject(obj.customId, {
         left: obj.left,

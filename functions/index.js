@@ -1286,7 +1286,23 @@ async function renderDesignServerSide(designJson, productId, view = 'front') {
   const scale = targetW / dims.canvas.w;
 
   const canvas = new StaticCanvas(null, { width: targetW, height: targetH });
-  const sanitizedJson = designJson.map(obj => ({ ...obj, text: typeof obj.text === 'string' ? obj.text : "" }));
+  const sanitizedJson = designJson.map(obj => {
+    let newObj = { ...obj, text: typeof obj.text === 'string' ? obj.text : "" };
+
+    if (newObj.type === 'image' && newObj.print_src && newObj.originalWidth && newObj.originalHeight) {
+      const scaleXRatio = newObj.width / newObj.originalWidth;
+      const scaleYRatio = newObj.height / newObj.originalHeight;
+      newObj.src = newObj.print_src;
+      newObj.scaleX = (newObj.scaleX || 1) * scaleXRatio;
+      newObj.scaleY = (newObj.scaleY || 1) * scaleYRatio;
+      newObj.width = newObj.originalWidth;
+      newObj.height = newObj.originalHeight;
+    } else if (newObj.type === 'image' && newObj.print_src) {
+      newObj.src = newObj.print_src;
+    }
+
+    return newObj;
+  });
 
   await canvas.loadFromJSON({ version: "6.9.0", objects: sanitizedJson });
   canvas.setZoom(scale);
@@ -1323,15 +1339,14 @@ exports.processNewOrder = functions
 
       // A. Generate Print Files
       for (const view of views) {
-        // Access design data directly from root
         const designJson = item.designData?.canvasViewStates?.[view] || item.designData?.viewStates?.[view];
         if (!designJson || designJson.length === 0) continue;
 
-        const imageBuffer = await renderDesignServerSide(designJson, item.productId, view);
-
         const bucket = admin.storage().bucket();
         const file = bucket.file(`orders/${orderId}/print_${view}.png`);
-        await file.save(imageBuffer, { metadata: { contentType: 'image/png' }, public: true });
+        
+        // Pass the file object directly to the renderer!
+        await renderDesignServerSide(designJson, item.productId, view, file);
 
         printFiles[view] = await getDownloadURL(file);
       }

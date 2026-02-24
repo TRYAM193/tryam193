@@ -235,6 +235,7 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
 
     const fileInputRef = useRef(null);
     const [isProcessing, setIsProcessing] = useState(false);
+    const isSvg = activeObject?.customType === 'svg';
 
     const getValue = (key) => object.props?.[key] ?? object[key];
     const handleUpdate = (key, value) => updateObject(object.id, { [key]: value });

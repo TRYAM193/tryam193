@@ -31,7 +31,7 @@ export const FONTS: Record<string, { bold: boolean; italic: boolean }> = {
   "Chewy": { bold: false, italic: false },
   "Amatic SC": { bold: true, italic: false },
   "Bebas Neue": { bold: false, italic: false },
-  "Horizon": { bold: false, italic: false }
+  "Reggae One": { bold: false, italic: false }
 };
 
 // Helper List for Dropdowns

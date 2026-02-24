@@ -11,7 +11,7 @@ export default async function Image(src, setSelectedId, setActiveTool, fabricCan
   let fabricImage;
   if (!addedImage) {
     console.log("Adding image to canvas:");
-    fabricImage = await FabricImage.fromURL(src, {});
+    fabricImage = await FabricImage.fromURL(src, {crossOrigin: 'anonymous'});
     fabricImage.set({
       left: 100,
       top: 100, 

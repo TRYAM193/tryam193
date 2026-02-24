@@ -32,7 +32,7 @@ export const translations: Record<Language, Record<string, string>> = {
     "dashboard.recent": "Recent Projects",
     "dashboard.viewAll": "View all",
     "dashboard.startFree": "Start Designing for Free",
-    "dashboard.startDesc": "Explore our templates and products. Sign in to save your work and access premium features.",
+    "dashboard.startDesc": "Explore our designs and products. Sign in to save your work and access premium features.",
     "dashboard.signInSave": "Sign In to Save Designs",
     "dashboard.edited": "Edited",
     "dashboard.ago": "ago",
@@ -42,11 +42,11 @@ export const translations: Record<Language, Record<string, string>> = {
     
     // Templates
     "templates.title": "Designs",
-    "templates.search": "Search templates...",
+    "templates.search": "Search Design...",
     "templates.filterTier": "Tier",
     "templates.allTiers": "All Tiers",
-    "templates.useTemplate": "Use Template",
-    "templates.noResults": "No templates found matching your filters.",
+    "templates.useTemplate": "Use Design",
+    "templates.noResults": "No Designs found matching your filters.",
     
     // Projects
     "projects.title": "Projects",

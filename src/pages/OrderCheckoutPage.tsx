@@ -37,10 +37,12 @@ import {
   Smartphone,
   CheckCircle2,
   MapPin,
-  AlertCircle
-
+  AlertCircle,
+  Sparkles
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { calculatePriceDetails } from "@/lib/priceUtils";
+import { PriceDisplay } from "@/components/PriceDisplay";
 
 const StripeCheckoutForm = ({ clientSecret, onSuccess, onClose }: any) => {
   const stripe = useStripe();
@@ -113,6 +115,13 @@ export default function OrderCheckoutPage() {
     NL: 'eur',
     CA: 'cad'
   }
+
+  const checkoutAnalysis = items.reduce((acc, item) => {
+    const { originalPrice, savings } = calculatePriceDetails(item.price, item.productId);
+    acc.totalMRP += (originalPrice * item.quantity);
+    acc.totalSavings += (savings * item.quantity);
+    return acc;
+  }, { totalMRP: 0, totalSavings: 0 });
 
 
   // Check verification on load (From User Profile)
@@ -251,36 +260,36 @@ export default function OrderCheckoutPage() {
     }
   };
 
-  // 2. 🌍 IP Geolocation & Restriction Logic
-  useEffect(() => {
-    // Only fetch if we haven't locked it yet
-    const fetchLocation = async () => {
-      try {
-        const res = await fetch('https://ipapi.co/json/');
-        const data = await res.json();
+  // // 2. 🌍 IP Geolocation & Restriction Logic
+  // useEffect(() => {
+  //   // Only fetch if we haven't locked it yet
+  //   const fetchLocation = async () => {
+  //     try {
+  //       const res = await fetch('https://ipapi.co/json/');
+  //       const data = await res.json();
 
-        // Logic: If user is in India, Force India.
-        // You can add 'OR data.country_code === "US"' if you want to lock US users too.
-        if (data.country_code === 'IN') {
-          setShippingInfo(prev => ({
-            ...prev,
-            countryCode: 'IN',
-            country: 'India', // ✅ Explicitly set name
+  //       // Logic: If user is in India, Force India.
+  //       // You can add 'OR data.country_code === "US"' if you want to lock US users too.
+  //       if (data.country_code === 'IN') {
+  //         setShippingInfo(prev => ({
+  //           ...prev,
+  //           countryCode: 'IN',
+  //           country: 'India', // ✅ Explicitly set name
 
-            // Only clear state if we switched countries
-            stateCode: prev.countryCode !== 'IN' ? '' : prev.stateCode,
-            state: prev.countryCode !== 'IN' ? '' : prev.state,
-            city: prev.countryCode !== 'IN' ? '' : prev.city
-          }));
-          setIsLocationLocked(true);
-        }
-      } catch (error) {
-        console.warn("Could not fetch IP location, defaulting to open selection.");
-      }
-    };
+  //           // Only clear state if we switched countries
+  //           stateCode: prev.countryCode !== 'IN' ? '' : prev.stateCode,
+  //           state: prev.countryCode !== 'IN' ? '' : prev.state,
+  //           city: prev.countryCode !== 'IN' ? '' : prev.city
+  //         }));
+  //         setIsLocationLocked(true);
+  //       }
+  //     } catch (error) {
+  //       console.warn("Could not fetch IP location, defaulting to open selection.");
+  //     }
+  //   };
 
-    // fetchLocation();
-  }, []);
+  //   // fetchLocation();
+  // }, []);
 
   // --- LOCATION LIBRARIES ---
   const countries = useMemo(() => {
@@ -355,11 +364,11 @@ export default function OrderCheckoutPage() {
     // }
 
     if (shippingInfo.countryCode === 'IN' && shippingInfo.gstNumber) {
-        if (!GST_REGEX.test(shippingInfo.gstNumber)) {
-            setGstError("Invalid Format. Ex: 22AAAAA0000A1Z5");
-            toast.error("Please fix the GST Number");
-            return;
-        }
+      if (!GST_REGEX.test(shippingInfo.gstNumber)) {
+        setGstError("Invalid Format. Ex: 22AAAAA0000A1Z5");
+        toast.error("Please fix the GST Number");
+        return;
+      }
     }
 
     setIsProcessing(true);
@@ -565,7 +574,7 @@ export default function OrderCheckoutPage() {
                     <Select
                       value={shippingInfo.countryCode}
                       onValueChange={handleCountryChange}
-                      // disabled={isLocationLocked}
+                    // disabled={isLocationLocked}
                     >
                       <SelectTrigger className={`bg-slate-900/50 border-white/10 text-white ${isLocationLocked ? "opacity-50 cursor-not-allowed" : ""} `}>
                         <SelectValue placeholder="Select Country" />
@@ -710,11 +719,20 @@ export default function OrderCheckoutPage() {
                       <div className="h-14 w-14 rounded-lg overflow-hidden border border-white/10 shrink-0">
                         <img src={item.thumbnail} alt="Preview" className="w-full h-full object-contain" />
                       </div>
+                      {/* Inside the items.map loop */}
                       <div className="flex-1 min-w-0 flex flex-col justify-center">
                         <h4 className="font-medium text-slate-200 text-sm truncate">{item.productTitle}</h4>
-                        <div className="flex justify-between mt-1 text-xs text-slate-400">
-                          <span>Qty: {item.quantity}</span>
-                          <span className="text-slate-200 font-medium">{currencySymbol}{(item.price * item.quantity).toFixed(2)}</span>
+
+                        {/* NEW PRICE DISPLAY */}
+                        <div className="flex justify-between mt-1">
+                          <span className="text-xs text-slate-400">Qty: {item.quantity}</span>
+                          <PriceDisplay
+                            price={item.price * item.quantity}
+                            currency={currencySymbol}
+                            productId={item.productId}
+                            size="sm"
+                            align="right"
+                          />
                         </div>
                       </div>
                     </div>
@@ -723,18 +741,35 @@ export default function OrderCheckoutPage() {
 
                 <Separator className="bg-white/10 my-4" />
 
+                {/* Replace the simple subtotal div with this block */}
+
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm text-slate-400">
-                    <span>Subtotal</span>
-                    <span>{currencySymbol}{totalPayAmount.toFixed(2)}</span>
+                    <span>Total MRP</span>
+                    <span className="line-through">{currencySymbol}{checkoutAnalysis.totalMRP.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-green-400 font-medium">
+                    <span>Discount</span>
+                    <span>-{currencySymbol}{checkoutAnalysis.totalSavings.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm text-slate-400">
                     <span>Shipping</span>
                     <span className="text-green-400">Free</span>
                   </div>
-                  <div className="flex justify-between text-xl font-bold text-white pt-2 border-t border-white/10 mt-2">
+                  <div className="flex justify-between text-sm text-slate-400">
+                    <span>Incl. of Tax</span>
+                  </div>
+
+                  <Separator className="bg-white/10 my-2" />
+
+                  <div className="flex justify-between text-xl font-bold text-white">
                     <span>Total</span>
                     <span>{currencySymbol}{totalPayAmount.toFixed(2)}</span>
+                  </div>
+
+                  {/* SAVINGS BADGE */}
+                  <div className="mt-3 flex items-center justify-center gap-2 text-xs font-bold text-green-400 bg-green-500/10 py-2 rounded border border-green-500/20">
+                    <Sparkles className="h-3 w-3" /> You saved {currencySymbol}{checkoutAnalysis.totalSavings.toFixed(2)}!
                   </div>
                 </div>
                 <div className="hidden lg:block">

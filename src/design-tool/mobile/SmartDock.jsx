@@ -56,6 +56,7 @@ export default function SmartDock({
     const type = selectedObject?.type;
     const isText = ['text', 'i-text', 'textbox', 'circle-text'].includes(type);
     const isImage = type === 'image';
+    const isSvg = selectedObject?.type === 'svg';
     // ✅ Check for shapes that support radius
     const isShape = ['rect', 'triangle', 'star', 'pentagon', 'hexagon', 'arrow', 'diamond', 'trapezoid', 'lightning', 'line', 'heart', 'bubble'].includes(type);
     const supportsRadius = ['rect', 'triangle', 'star', 'pentagon', 'hexagon', 'arrow', 'diamond', 'trapezoid', 'lightning'].includes(type);

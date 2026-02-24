@@ -246,7 +246,7 @@ export function DashboardSidebar() {
                     <ShoppingCart className={`h-4 w-4 ${!isCollapsed && "mr-3"}`} />
                     {!isCollapsed && <span>Cart</span>}
                     {cartCount > 0 && (
-                      <Badge className={`bg-red-500 text-white text-[10px] h-5 px-1.5 ${isCollapsed ? "absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center rounded-full" : "ml-auto"}`}>
+                      <Badge className={`bg-red-500 text-white text-[10px] h-5 px-1.5 ${isCollapsed ? "absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center rounded-full" : "ml-auto rounded-xl"}`}>
                         {cartCount}
                       </Badge>
                     )}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router";
-import { doc, getDoc, collection, query, orderBy, getDocs, limit, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, collection, query, orderBy, getDocs, limit, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/firebase";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,8 @@ import { COLOR_MAP } from "@/lib/colorMaps";
 import { FiCheckCircle } from "react-icons/fi";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getRegionFromIP } from "@/lib/ipDetect";
+import { useAuth } from '@/hooks/use-auth';
+import { PriceDisplay } from "@/components/PriceDisplay";
 
 // ✅ Interface matches our 'initialProducts.ts' structure
 interface ProductVariants {
@@ -51,6 +53,7 @@ export default function ProductDetails() {
     const { productId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
+    const { user } = useAuth();
 
     const [product, setProduct] = useState<ProductData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -68,7 +71,7 @@ export default function ProductDetails() {
 
     // ✅ Region State
     const [region, setRegion] = useState<"IN" | "US" | "GB" | "EU" | "CA">("IN");
-    const [checkingLocation, setCheckingLocation] = useState(true);
+    const [checkingLocation, setCheckingLocation] = useState(false);
 
     // Reviews
     const [reviews, setReviews] = useState<any[]>([])
@@ -125,19 +128,22 @@ export default function ProductDetails() {
 
     const fetchReviews = async () => {
         if (!productId) return
-
+        if (!user) return
         setReviewsLoading(true)
 
-        const q = query(
-            collection(db, "base_products", productId, "reviews"),
-            orderBy("createdAt", "desc"),
-            limit(10)
-        )
-
-        const snap = await getDocs(q)
-        setReviews(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-
-        setReviewsLoading(false)
+        try {
+            const q = query(
+                collection(db, "base_products", productId, "reviews"),
+                orderBy("createdAt", "desc"),
+                limit(10)
+            )
+            const snap = await getDocs(q)
+            setReviews(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+        } catch (error) {
+            console.error("Error fetching reviews", error)
+        } finally {
+            setReviewsLoading(false)
+        }
     }
     // 1️⃣ Fetch Product Data
     useEffect(() => {
@@ -185,28 +191,28 @@ export default function ProductDetails() {
     }, [productId, region]);
 
     // 2️⃣ Automatic IP-Based Region Detection
-    useEffect(() => {
-        async function detectRegion() {
-            const data = location.state as { region?: string };
-            if (data?.region && ["IN", "US", "GB", "CA"].includes(data.region)) {
-                setRegion(data.region as "IN" | "US" | "GB" | "CA");
-                setCheckingLocation(false);
-                return;
-            }
+    // useEffect(() => {
+    //     async function detectRegion() {
+    //         const data = location.state as { region?: string };
+    //         if (data?.region && ["IN", "US", "GB", "CA"].includes(data.region)) {
+    //             setRegion(data.region as "IN" | "US" | "GB" | "CA");
+    //             setCheckingLocation(false);
+    //             return;
+    //         }
 
-            try {
-                const regionFromIp = await getRegionFromIP();
-                setRegion(regionFromIp);
-            } catch (error) {
-                console.warn("Could not detect location, defaulting to IN");
-                setRegion("IN");
-            } finally {
-                setCheckingLocation(false);
-            }
+    //         try {
+    //             const regionFromIp = await getRegionFromIP();
+    //             setRegion(regionFromIp);
+    //         } catch (error) {
+    //             console.warn("Could not detect location, defaulting to IN");
+    //             setRegion("IN");
+    //         } finally {
+    //             setCheckingLocation(false);
+    //         }
 
-        }
-        detectRegion();
-    }, []);
+    //     }
+    //     detectRegion();
+    // }, []);
 
     const handleStartDesigning = () => {
         if (!product) return;
@@ -267,6 +273,11 @@ export default function ProductDetails() {
     const handleSubmitReview = async () => {
         if (!productId) return
 
+        if (!user) {
+            toast.error("You must be logged in to submit a review")
+            return
+        }
+
         if (rating === 0) {
             toast.error("Please select a rating")
             return
@@ -277,16 +288,22 @@ export default function ProductDetails() {
             return
         }
 
-        await addDoc(
-            collection(db, "base_products", productId, "reviews"),
-            {
-                rating,
-                name: name || "Anonymous",
-                comment,
-                verified: false,
-                createdAt: serverTimestamp(),
-            }
+        const reviewRef = doc(
+            db,
+            "base_products",
+            productId,
+            "reviews",
+            user.uid // 🔐 ONE review per user
         )
+
+        await setDoc(reviewRef, {
+            userId: user.uid,
+            rating,
+            name: name || user.displayName || "Anonymous",
+            comment,
+            verified: false,
+            createdAt: serverTimestamp(),
+        })
 
         toast.success("Thank you for your review!")
 
@@ -421,17 +438,23 @@ export default function ProductDetails() {
                         </div>
 
                         {/* 💰 PRICE (GOLDEN GLOW) */}
-                        <div className="flex items-baseline gap-4">
+                        <div className="space-y-1">
+                            {/* Optional "Limited Deal" Badge */}
+                            <div className="inline-flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded mb-1">
+                                Limited Time Deal
+                            </div>
+
                             {checkingLocation ? (
-                                <span className="text-lg text-slate-500 animate-pulse">Divining price...</span>
+                                <span className="text-lg text-slate-500 animate-pulse">Loading price...</span>
                             ) : (
-                                <span className="text-4xl sm:text-5xl font-bold text-orange-400 drop-shadow-[0_0_15px_rgba(251,146,60,0.3)]">
-                                    {currentSymbol}{currentPrice.toFixed(2)}
-                                </span>
+                                <PriceDisplay
+                                    price={currentPrice}
+                                    currency={currentSymbol}
+                                    productId={product.id}
+                                    size="xl"
+                                    showSaveBadge={true}
+                                />
                             )}
-                            <span className="text-xs font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded uppercase tracking-wider">
-                                Premium Quality
-                            </span>
                         </div>
 
                         <Separator className="bg-white/10" />
@@ -482,7 +505,7 @@ export default function ProductDetails() {
                                 )}
                             </div>
                             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                                {sizes.map((size) => (
+                                {sizes?.map((size) => (
                                     <button
                                         key={size}
                                         onClick={() => setSelectedSize(size)}
@@ -558,7 +581,7 @@ export default function ProductDetails() {
                                             </div>
 
                                             <p className="text-sm text-slate-400">
-                                                {averageRating.toFixed(1)} · {totalReviews} reviews
+                                                {averageRating.toFixed(1)} · {totalReviews} review(s)
                                             </p>
                                         </div>
 

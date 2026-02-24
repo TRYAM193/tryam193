@@ -9,6 +9,7 @@ import {
 } from 'react-icons/fi';
 import { Loader2, Sparkles, ImagePlusIcon, Layout } from 'lucide-react'; // 👈 Import Loader
 import Image from '../objectAdders/Image'
+import addSvgToRedux from '../objectAdders/Svg';
 
 export default function MainToolbar({
     activePanel, onSelectTool, setSelectedId, setActiveTool,
@@ -33,8 +34,22 @@ export default function MainToolbar({
     const bellRef = useRef(null);
     const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
     const fileInput = useRef(null)
+    const svgInputRef = useRef(null);
 
-    // ... (Keep existing handlers for Saved Designs, togglePopup, clickOutside) ...
+    const handleSvgUpload = (event) => {
+        const file = event.target.files[0];
+        if (!file || file.type !== 'image/svg+xml') return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const svgString = e.target.result;
+            if (svgString) {
+                addSvgToRedux(svgString); // Push raw math straight to Redux!
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = ''; // Reset input
+    };
 
     const handleSavedDesignsClick = () => onSelectTool('saved');
 
@@ -58,7 +73,7 @@ export default function MainToolbar({
 
             reader.readAsDataURL(file);
         }
-        
+
         event.target.result = ''
 
     }
@@ -155,6 +170,15 @@ export default function MainToolbar({
                     <input type="file" ref={fileInput} onChange={handleImage} style={{ display: 'none' }} accept="image/*" />
                     <span>Admin Image</span>
                 </button>
+            )}
+            {isAdmin && (
+                <>
+                    <button onClick={() => svgInputRef.current.click()} className="text-orange-500">
+                        <ImagePlusIcon size={24} />
+                        <input type="file" ref={svgInputRef} onChange={handleSvgUpload} style={{ display: 'none' }} accept=".svg" />
+                        <span>Admin SVG</span>
+                    </button>
+                </>
             )}
             <ToolButton icon={FiSquare} label="Shapes" isActive={activePanel === 'shapes'} onClick={() => onSelectTool('shapes')} />
             <ToolButton icon={Layout} label='Templates' isActive={activePanel === 'templates'} onClick={() => onSelectTool('templates')} />

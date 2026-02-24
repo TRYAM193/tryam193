@@ -14,7 +14,10 @@ export interface CartItem {
   };
   thumbnail: string;
   price: number;
-  currency: string;
+  currency: {
+    code: string;
+    symbol: string;
+  };
   quantity: number;
   region: string;
   vendor: string;

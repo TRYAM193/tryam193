@@ -17,6 +17,8 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { calculatePriceDetails } from "@/lib/priceUtils";
+import { PriceDisplay } from "@/components/PriceDisplay";
 
 // ------------------------------------------------------------------
 // 💀 SKELETON COMPONENTS
@@ -25,14 +27,14 @@ const CartItemSkeleton = () => (
   <div className="w-full bg-slate-800/40 border border-white/5 rounded-xl overflow-hidden p-4 sm:p-6 flex gap-4 sm:gap-6 items-start animate-pulse">
     {/* Image Skeleton */}
     <div className="h-24 w-24 sm:h-32 sm:w-32 bg-slate-700/50 rounded-xl shrink-0" />
-    
+
     <div className="flex-1 space-y-4 py-1">
       {/* Title & Price */}
       <div className="flex justify-between items-start gap-4">
         <div className="h-6 w-1/2 bg-slate-700/50 rounded" />
         <div className="h-6 w-20 bg-slate-700/50 rounded" />
       </div>
-      
+
       {/* Variants */}
       <div className="flex gap-2">
         <div className="h-5 w-12 bg-slate-700/30 rounded" />
@@ -83,6 +85,12 @@ export default function CartPage() {
 
   const { user } = useAuth();
   const navigate = useNavigate();
+  const cartAnalysis = items.reduce((acc, item) => {
+    const { originalPrice, savings } = calculatePriceDetails(item.price, item.productId);
+    acc.totalMRP += (originalPrice * item.quantity);
+    acc.totalSavings += (savings * item.quantity);
+    return acc;
+  }, { totalMRP: 0, totalSavings: 0 });
 
   // 1. Loading State (Now using Skeletons)
   if (isLoading) {
@@ -204,9 +212,15 @@ export default function CartPage() {
                                   <h3 className="font-bold text-base sm:text-lg text-slate-200 truncate pr-0 sm:pr-4">
                                     {item.title}
                                   </h3>
-                                  <p className="font-bold text-base sm:text-lg text-white">
-                                    {item.currency} {(item.price * item.quantity).toFixed(2)}
-                                  </p>
+                                  <div className="flex flex-col items-end">
+                                    <PriceDisplay
+                                      price={item.price * item.quantity}
+                                      currency={item.currency?.symbol || "₹"}
+                                      productId={item.productId}
+                                      size="md"
+                                      align="right"
+                                    />
+                                  </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2 mt-1.5 text-sm text-slate-400">
                                   <span className="px-2 py-0.5 bg-slate-900 rounded border border-white/5 text-xs sm:text-sm">
@@ -299,7 +313,7 @@ export default function CartPage() {
                               <span className="bg-white/5 px-1.5 rounded">{item.variant.size}</span>
                               <span className="bg-white/5 px-1.5 rounded">{item.variant.color}</span>
                               <span>•</span>
-                              <span className="text-slate-300">{item.currency} {item.price}</span>
+                              <span className="text-slate-300">{item.currency.symbol} {item.price}</span>
                             </div>
                           </div>
 
@@ -336,24 +350,33 @@ export default function CartPage() {
                     <CardContent className="p-6 space-y-6">
 
                       <div className="space-y-3 text-sm text-slate-300">
-                        <div className="flex justify-between">
-                          <span>Subtotal</span>
-                          <span>₹{cartTotal.toFixed(2)}</span>
+                        <div className="flex justify-between text-slate-400">
+                          <span>Total MRP</span>
+                          <span className="line-through">₹{cartAnalysis.totalMRP.toFixed(2)}</span>
+                        </div>
+
+                        <div className="flex justify-between text-green-400">
+                          <span>Discount on MRP</span>
+                          <span>-₹{cartAnalysis.totalSavings.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Shipping</span>
                           <span className="text-green-400">Free</span>
                         </div>
                         <div className="flex justify-between">
-                          <span>Tax (18% GST included)</span>
-                          <span className="text-slate-500">₹{(cartTotal * 0.18).toFixed(2)}</span>
+                          <span>Incl. of tax</span>
                         </div>
 
                         <Separator className="bg-white/10 my-2" />
 
                         <div className="flex justify-between text-xl font-bold text-white pt-2">
-                          <span>Total</span>
+                          <span>Total Amount</span>
                           <span>₹{cartTotal.toFixed(2)}</span>
+                        </div>
+
+                        {/* 🏆 THE SAVINGS BANNER */}
+                        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2 text-center text-xs font-bold text-green-400">
+                          You are saving ₹{cartAnalysis.totalSavings.toFixed(2)} on this order!
                         </div>
                       </div>
 

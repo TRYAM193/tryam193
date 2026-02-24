@@ -311,13 +311,12 @@ export const saveGlobalTemplate = async (canvas, name, category = "General", obj
             height: proxyData.height,
             scaleX: obj.props.scaleX * widthRatio,
             scaleY: obj.props.scaleY * heightRatio,
-            canvasBackground: canvas?.backgroundColor || 'white'
           }
         };
       })
     );
-
-
+    
+    
     const templateData = {
       id: templateId,
       name: name || "Untitled Template",
@@ -325,7 +324,8 @@ export const saveGlobalTemplate = async (canvas, name, category = "General", obj
       createdAt: Date.now(),
       type: 'BLANK', // Always BLANK as requested
       thumbnailUrl: thumbnailURL,
-      canvasData: modifiedObjects
+      canvasData: modifiedObjects,
+      canvasBackground: canvas?.backgroundColor || 'white'
     };
 
     console.log(templateData)

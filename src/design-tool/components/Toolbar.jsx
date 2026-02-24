@@ -224,6 +224,7 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
 
   const currentEffect = object?.textEffect || props.textEffect || 'none';
   const effectiveType = object?.type || type;
+  const isSvg = object?.type === 'svg';
   const isTextObject = effectiveType === 'text' || effectiveType === 'circle-text';
   const isShapeObject = ['rect', 'circle', 'triangle', 'star', 'pentagon', 'hexagon', 'line', 'arrow', 'diamond', 'trapezoid', 'heart', 'lightning', 'bubble'].includes(effectiveType);
   const supportsBorderRadius = ['rect', 'triangle', 'star', 'pentagon', 'hexagon', 'arrow', 'diamond', 'trapezoid', 'lightning'].includes(effectiveType);
@@ -391,7 +392,7 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
           <div className="space-y-1.5">
             <textarea
               ref={textareaRef}
-              className="w-full bg-slate-800/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 transition-colors resize-none"
+              className="w-full bg-slate-800/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 no-scrollbar transition-colors resize-none"
               rows={3}
               value={localText}
               placeholder="Enter text..."
@@ -516,7 +517,7 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
       )}
 
       {/* ================= SHAPE PROPERTIES ================= */}
-      {isShapeObject && (
+      {(isShapeObject || isSvg) && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div className="flex gap-4 items-center">
             {type !== 'line' && (

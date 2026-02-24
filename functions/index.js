@@ -1266,18 +1266,71 @@ const PRODUCT_DIMENSIONS = {
   }
 };
 
+const FONTS = {
+  "Roboto": { bold: true, italic: true },
+  "Open Sans": { bold: true, italic: true },
+  "Montserrat": { bold: true, italic: true },
+  "Lato": { bold: true, italic: true },
+  "Poppins": { bold: true, italic: true },
+  "Oswald": { bold: true, italic: false }, // Variable weight, usually no italic in standard set
+  "Raleway": { bold: true, italic: true },
+  "Playfair Display": { bold: true, italic: true },
+  "Merriweather": { bold: true, italic: true },
+  "Roboto Slab": { bold: true, italic: false },
+  "Lora": { bold: true, italic: true },
+  "Abril Fatface": { bold: false, italic: false },
+  "Arvo": { bold: true, italic: false },
+  "Dancing Script": { bold: true, italic: false }, // Bold works for headers
+  "Pacifico": { bold: false, italic: false },
+  "Great Vibes": { bold: false, italic: false },
+  "Satisfy": { bold: false, italic: false },
+  "Yellowtail": { bold: false, italic: false },
+  "Caveat": { bold: true, italic: false },
+  "Shadows Into Light": { bold: false, italic: false },
+  "Indie Flower": { bold: false, italic: false },
+  "Permanent Marker": { bold: false, italic: false },
+  "Bangers": { bold: false, italic: false },
+  "Anton": { bold: false, italic: false },
+  "Lobster": { bold: false, italic: false },
+  "Righteous": { bold: false, italic: false },
+  "Fredoka One": { bold: false, italic: false },
+  "Chewy": { bold: false, italic: false },
+  "Amatic SC": { bold: true, italic: false },
+  "Bebas Neue": { bold: false, italic: false },
+  "Reggae One": { bold: false, italic: false }
+}
 
-try {
-  const fontsDir = path.join(__dirname, 'fonts');
-  if (fs.existsSync(fontsDir)) {
-    fs.readdirSync(fontsDir).forEach(file => {
-      if (file.endsWith('.ttf') || file.endsWith('.otf')) {
-        const name = path.basename(file, path.extname(file));
-        registerFont(path.join(fontsDir, file), { family: name.split('-')[0] });
-      }
-    });
-  }
-} catch (e) { }
+
+const loadFonts = () => {
+  const fontsDir = path.join(__dirname, "fonts");
+
+  Object.entries(FONTS).forEach(([family, config]) => {
+    // A. Always register Regular
+    const regularPath = path.join(fontsDir, family, `${family}-Regular.ttf`);
+    registerFont(regularPath, { family: family });
+
+    // B. Register Bold if enabled
+    if (config.bold) {
+      const boldPath = path.join(fontsDir, family, `${family}-Bold.ttf`);
+      registerFont(boldPath, { family: family, weight: "bold" });
+    }
+
+    // C. Register Italic if enabled
+    if (config.italic) {
+      const italicPath = path.join(fontsDir, family, `${family}-Italic.ttf`);
+      registerFont(italicPath, { family: family, style: "italic" });
+    }
+
+    // D. Register BoldItalic if BOTH are enabled
+    if (config.bold && config.italic) {
+      const boldItalicPath = path.join(fontsDir, family, `${family}-BoldItalic.ttf`);
+      registerFont(boldItalicPath, { family: family, weight: "bold", style: "italic" });
+    }
+  });
+
+  console.log("✅ All fonts registered successfully!");
+};
+
 
 async function renderDesignServerSide(designJson, productId, view = 'front') {
   const dims = PRODUCT_DIMENSIONS[productId] || { canvas: { w: 420, h: 560 }, print: { front: { w: 2400, h: 3200 } } };
@@ -1331,6 +1384,7 @@ exports.processNewOrder = functions
     console.log(`🤖 Processing Split Order ${orderId} (${newData.title})...`);
 
     await change.after.ref.update({ providerStatus: 'processing' });
+    loadFonts();
 
     try {
       const item = newData;

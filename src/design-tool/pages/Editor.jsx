@@ -30,6 +30,7 @@ import ExportButton from '../components/ExportButton';
 import SaveTemplateButton from '../components/SaveTemplateButton';
 import { v4 as uuidv4 } from 'uuid';
 import { uploadToStorage } from '../utils/saveDesign'
+import { PriceDisplay } from '@/components/PriceDisplay';
 
 function removeUndefined(obj) {
     if (Array.isArray(obj)) {
@@ -631,7 +632,7 @@ export default function EditorPanel() {
 
     useEffect(() => {
         if (productData.canvas_size) {
-            const area = productData.canvas_size;
+            const area = productData.canvas_size?.[currentView] || productData.canvas_size;
             setCanvasDims({ width: area.width || 4500, height: area.height || 5400 });
         }
     }, [productData, currentView]);
@@ -984,7 +985,6 @@ export default function EditorPanel() {
                                 <button title='Undo' className="top-bar-button" onClick={() => dispatch(undo())} disabled={!past.length} style={{ opacity: past.length ? '1' : '0.5' }}><Undo2 size={18} /></button>
                                 <button title='Redo' className="top-bar-button" onClick={() => dispatch(redo())} disabled={!future.length} style={{ opacity: future.length ? '1' : '0.5' }}><Redo2 size={18} /></button>
                             </div>
-                            <button onClick={() => generateOrderPayload()}>Hi</button>
                             <div className="control-group divider">
                                 <button title='Delete' className="top-bar-button danger" onClick={() => removeObject(selectedId, setSelectedId, setActiveTool)} style={{ opacity: !selectedId ? '0.5' : '1' }}><FiTrash2 size={18} /></button>
                             </div>
@@ -1052,7 +1052,7 @@ export default function EditorPanel() {
                         {selectedId ? (
                             <RightSidebarTabs id={selectedId} type={activeTool} object={canvasObjects.find((obj) => obj.id === selectedId)} updateObject={updateObject} removeObject={removeObject} addText={addText} fabricCanvas={fabricCanvas} setSelectedId={setSelectedId} updateDpiForObject={updateDpiForObject} printDimensions={{ w: productData?.print_areas?.[currentView].width, h: productData?.print_areas?.[currentView].height }} />
                         ) : (productData ? (
-                            <div className="p-6 flex flex-col h-full overflow-y-auto">
+                            <div className="p-2 flex flex-col h-full overflow-y-auto">
                                 <div className="mobile-panel-header">
                                     <span className="mobile-panel-title">Product Options</span>
                                     <button onClick={() => setShowColorPanel(false)} className="mobile-close-btn"><FiChevronDown size={24} /></button>
@@ -1077,7 +1077,7 @@ export default function EditorPanel() {
                                         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Size</h3>
                                     </div>
                                     <div className="grid grid-cols-4 gap-2">
-                                        {sizes.map((size) => (
+                                        {sizes?.map((size) => (
                                             <button key={size} onClick={() => setSelectedSize(size)} className={`py-2 text-sm font-medium rounded-md border transition-all ${selectedSize === size ? "border-orange-500 bg-orange-500/10 text-orange-400 shadow-[0_0_10px_rgba(234,88,12,0.2)]" : "border-slate-700 text-slate-400 hover:border-slate-500 hover:bg-slate-800"}`}>
                                                 {size}
                                             </button>
@@ -1099,20 +1099,35 @@ export default function EditorPanel() {
 
                                 <div className="mt-auto pt-6 border-t border-slate-700">
                                     <div className="flex justify-between items-end mb-4">
-                                        <div>
-                                            <p className="text-xs text-slate-400">Total Price</p>
-                                            <p className="text-2xl font-bold text-white">{currencyInfo.symbol}{totalPrice}</p>
+                                        <div className="flex justify-between items-end mb-4">
+                                            <div>
+                                                <p className="text-xs text-slate-400 mb-1">Total Price</p>
+                                                <PriceDisplay
+                                                    // We pass unit price * quantity = totalPrice
+                                                    price={parseFloat(totalPrice)}
+                                                    currency={currencyInfo.symbol}
+                                                    productId={urlProductId || currentDesign?.productConfig?.productId || productData.id}
+                                                    size="lg"
+                                                />
+                                            </div>
+
+                                            {/* Optional: Show per-unit breakdown if quantity > 1 */}
+                                            {quantity > 1 && (
+                                                <div className="text-xs text-slate-500 mb-1 text-right">
+                                                    {quantity} x {currencyInfo.symbol}{currentPrice}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex gap-3 flex-col sm:flex-row">
-                                        <Button onClick={handleAddToCart} disabled={isAddingToCart || !fabricCanvas} className={`flex-1 h-12 text-base text-white border border-slate-600 ${isEditMode ? "bg-blue-600 hover:bg-blue-700 border-blue-500" : "bg-slate-700 hover:bg-slate-600"}`}>
+                                        <Button onClick={handleAddToCart} disabled={isAddingToCart || !fabricCanvas} className={`flex-1 h-12 w-10 text-base text-white border border-slate-600 ${isEditMode ? "bg-blue-600 hover:bg-blue-700 border-blue-500" : "bg-slate-700 hover:bg-slate-600"}`}>
                                             {isAddingToCart ? <Loader2 className="animate-spin" /> : isEditMode ? <> <Save className="mr-2 h-4 w-4" /> Update Cart </> : <> <FiShoppingBag className="mr-2" /> Add to Cart </>}
                                         </Button>
-                                        <Button onClick={handleBuyNow} disabled={isSaving || !fabricCanvas} className="flex-1 h-12 text-base bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white shadow-lg shadow-orange-900/40 border-0">
+                                        <Button onClick={handleBuyNow} disabled={isSaving || !fabricCanvas} className="flex-1 h-12 w-10 text-base bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white shadow-lg shadow-orange-900/40 border-0">
                                             {isSaving ? <> <Loader2 className="animate-spin mr-2" /> Processing... </> : <> <FiShoppingCart className="mr-2" /> Buy Now </>}
                                         </Button>
                                     </div>
-                                    <p className="text-[10px] text-center text-slate-500 mt-2">Secure checkout powered by Stripe</p>
+                                    <p className="text-[10px] text-center text-slate-500 mt-2">Secure checkout powered by Razorpay</p>
                                 </div>
                             </div>
                         ) : (!fabricCanvas?.getActiveObject() &&

@@ -14,7 +14,6 @@ import { handleCanvasAction } from '../utils/canvasActions';
 import ShapeAdder from '../objectAdders/Shapes';
 import ContextMenu from './ContextMenu';
 import { v4 as uuidv4 } from 'uuid';
-import { BringToFront, FlipHorizontal } from 'lucide-react';
 
 fabric.Object.prototype.toObject = (function (toObject) {
   return function (propertiesToInclude) {
@@ -27,6 +26,7 @@ fabric.Object.prototype.toObject = (function (toObject) {
     );
   };
 })(fabric.Object.prototype.toObject);
+fabric.Image.prototype.crossOrigin = 'anonymous';
 
 const isDifferent = (val1, val2) => {
   if (typeof val1 === 'number' && typeof val2 === 'number') {
@@ -521,16 +521,16 @@ export default function CanvasEditor({
             //     scaleY: 1
             //   };
             // } else {
-              updatedPresent[index].props = {
-                ...updatedPresent[index].props,
-                left: child.left,
-                top: child.top,
-                angle: child.angle,
-                scaleX: child.scaleX,
-                scaleY: child.scaleY,
-                width: child.width,
-                height: child.height
-                // Note: Do not force width/height updates here unless necessary
+            updatedPresent[index].props = {
+              ...updatedPresent[index].props,
+              left: child.left,
+              top: child.top,
+              angle: child.angle,
+              scaleX: child.scaleX,
+              scaleY: child.scaleY,
+              width: child.width,
+              height: child.height
+              // Note: Do not force width/height updates here unless necessary
               // };
             }
             hasChanges = true;
@@ -642,7 +642,7 @@ export default function CanvasEditor({
             // 🔒 Lock: Mark this ID as "Loading"
             pendingImagesRef.current.add(objData.id);
             try {
-              const newObj = await FabricImage.fromURL(objData.props.src, { ...objData.props });
+              const newObj = await FabricImage.fromURL(objData.props.src, { crossOrigin: 'anonymous' });
               newObj.set({
                 customId: objData.id,
                 ...objData.props
@@ -660,6 +660,50 @@ export default function CanvasEditor({
             }
           } else if (existing) {
             updateExisting(existing, objData, isDifferent);
+          }
+        }
+        if (objData.type === 'svg') {
+          if (!existing) {
+            try {
+              // 👇 THE FIX: Use Fabric v6 Promise syntax
+              const { objects, options } = await fabric.loadSVGFromString(objData.svgString);
+
+              const svgGroup = fabric.util.groupSVGElements(objects, options);
+
+              // Apply Redux properties
+              svgGroup.set({
+                customId: objData.id,
+                customType: 'svg', // 👈 Tag it so the toolbars recognize it!
+                ...objData.props
+              });
+
+              // If it has a specific fill, apply it to all internal shapes
+              if (objData.props.fill && svgGroup._objects) {
+                svgGroup._objects.forEach(path => path.set('fill', objData.props.fill));
+              }
+
+              fabricCanvas.add(svgGroup);
+              fabricCanvas.requestRenderAll();
+            } catch (err) {
+              console.error("Failed to load SVG from Redux string:", err);
+            }
+          } else {
+            // 2. Update existing SVG (Sync Redux -> Fabric)
+            existing.set({
+              left: objData.props.left,
+              top: objData.props.top,
+              scaleX: objData.props.scaleX,
+              scaleY: objData.props.scaleY,
+              angle: objData.props.angle,
+              opacity: objData.props.opacity
+            });
+
+            // Loop through paths to sync color changes
+            if (objData.props.fill && existing._objects) {
+              existing._objects.forEach(path => path.set('fill', objData.props.fill));
+            }
+
+            existing.setCoords();
           }
         }
 

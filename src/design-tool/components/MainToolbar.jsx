@@ -154,7 +154,7 @@ export default function MainToolbar({
     }
 
     return (
-        <div className="main-toolbar relative flex flex-col h-full z-40">
+        <div className="main-toolbar relative flex flex-col h-full no-scrollbar z-40">
             {brandDisplay}
             <button title="Saved Designs" onClick={handleSavedDesignsClick} className={`tool-button-wrapper saved-designs-link ${activePanel === 'saved' ? 'active' : ''}`}>
                 <FiFolder size={24} /> <span>Saved</span>
@@ -168,15 +168,16 @@ export default function MainToolbar({
                 <button onClick={handleClick}>
                     <ImagePlusIcon size={24} />
                     <input type="file" ref={fileInput} onChange={handleImage} style={{ display: 'none' }} accept="image/*" />
-                    <span>Admin Image</span>
+                    <span className='text-xs text-slate-600'>AdminImage</span>
                 </button>
             )}
             {isAdmin && (
+                //120039082030
                 <>
                     <button onClick={() => svgInputRef.current.click()} className="text-orange-500">
                         <ImagePlusIcon size={24} />
                         <input type="file" ref={svgInputRef} onChange={handleSvgUpload} style={{ display: 'none' }} accept=".svg" />
-                        <span>Admin SVG</span>
+                        <span className='text-xs text-slate-600'>Admin SVG</span>
                     </button>
                 </>
             )}

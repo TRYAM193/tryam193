@@ -504,6 +504,7 @@ export default function OrderCheckoutPage() {
       <p className="text-slate-400">Loading checkout...</p>
     </div>
   );
+  
 
   return (
     <div className="min-h-screen relative pb-20 font-sans bg-[#0f172a] text-slate-100 selection:bg-orange-500/30">

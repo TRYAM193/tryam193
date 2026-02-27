@@ -312,6 +312,65 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
     }
   }, [object?.id]);
 
+  // 🔤 BULLETPROOF FONT LOADER (Using WebFontLoader)
+  const handleFontChange = (newFont) => {
+    // 1. Instantly update the UI dropdown so it feels snappy to the user
+    // setCurrentFont(newFont);
+
+    const applyToFabric = () => {
+      if (!fabricCanvas) return;
+
+      const activeObj = fabricCanvas.getObjects().find(o => o.customId === id);
+      if (activeObj && ['text', 'i-text', 'textbox'].includes(activeObj.type)) {
+        // Set the new font
+        activeObj.set('fontFamily', newFont);
+
+        // Clear old Arial cache bounds
+        delete activeObj.__charBounds;
+        delete activeObj.__lineWidths;
+
+        // Force proper measurement of the new font
+        activeObj.initDimensions();
+        activeObj.setCoords();
+        fabricCanvas.requestRenderAll();
+
+        // Commit to history and database
+        handleUpdateAndHistory('fontFamily', newFont);
+        setTimeout(() => {
+          fabricCanvas.requestRenderAll();
+        }, 1000)
+      }
+    };
+
+    const loadWebFont = () => {
+      window.WebFont.load({
+        google: {
+          // Request normal, bold, and italic versions so they don't pop later
+          families: [`${newFont}:400,700,400i,700i`]
+        },
+        active: () => {
+          // 🎉 FONT IS 100% READY AND PAINTED. Safe to draw!
+          applyToFabric();
+        },
+        inactive: () => {
+          console.warn(`WebFontLoader failed to load: ${newFont}. Falling back.`);
+          applyToFabric(); // Fallback just in case
+        },
+        timeout: 5000 // 5 second safety net
+      });
+    };
+
+    // 2. Check if WebFontLoader is already in the browser, if not, inject it!
+    if (!window.WebFont) {
+      const script = document.createElement('script');
+      script.src = 'https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js';
+      script.onload = loadWebFont;
+      document.head.appendChild(script);
+    } else {
+      loadWebFont();
+    }
+  };
+
   const handleUpdateAndHistory = async (key, value) => {
     const updates = { [key]: value };
     const shadowKeys = ['shadowColor', 'shadowBlur', 'shadowOffsetX', 'shadowOffsetY'];
@@ -324,6 +383,7 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
     }
     if (key === 'fontFamily') setCurrentFont(value);
     updateObject(id, updates);
+    if (fabricCanvas) fabricCanvas.requestRenderAll(); // Ensure canvas updates immediately
   };
 
   const handleLiveUpdate = (key, value) => {
@@ -403,14 +463,7 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
                 isTypingRef.current = true;
                 setLocalText(value);
 
-                // 🔥 LIVE FABRIC UPDATE (no React loop)
-                liveUpdateFabric(
-                  fabricCanvas,
-                  id,
-                  { text: value },
-                  liveProps,
-                  object
-                );
+                handleUpdateAndHistory('text', value);
 
                 requestAnimationFrame(() => {
                   if (!textareaRef.current) return;
@@ -434,11 +487,20 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
             <div className="flex items-center justify-center px-2">
               <input type="color" className="w-5 h-5 rounded cursor-pointer bg-transparent border-none p-0" value={liveProps.fill || '#000000'} onChange={(e) => handleColorChange('fill', e.target.value)} />
             </div>
-            <button onClick={() => updateObject(id, {textAlign: 'right'})}>
-              text align right
+
+          </div>
+          <div className="flex bg-slate-900/80 p-1 rounded-lg border border-white/5">
+            {/* ✅ NEW ALIGNMENT BUTTONS */}
+            <button onClick={() => handleUpdateAndHistory('textAlign', 'left')} className={`flex-1 py-1.5 rounded flex justify-center transition-colors ${liveProps.textAlign === 'left' || !liveProps.textAlign ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-white'}`} title="Align Left">
+              <FiAlignLeft />
+            </button>
+            <button onClick={() => handleUpdateAndHistory('textAlign', 'center')} className={`flex-1 py-1.5 rounded flex justify-center transition-colors ${liveProps.textAlign === 'center' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-white'}`} title="Align Center">
+              <FiAlignCenter />
+            </button>
+            <button onClick={() => handleUpdateAndHistory('textAlign', 'right')} className={`flex-1 py-1.5 rounded flex justify-center transition-colors ${liveProps.textAlign === 'right' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-white'}`} title="Align Right">
+              <FiAlignRight />
             </button>
           </div>
-
           {/* Text Effects Pills */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase">Effect</label>
@@ -487,7 +549,7 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
 
           {/* Font Selection */}
           <div className="space-y-2 pt-2 border-t border-white/5">
-            <FontPicker currentFont={liveProps.fontFamily} onSelect={(f) => handleUpdateAndHistory('fontFamily', f)} />
+            <FontPicker currentFont={liveProps.fontFamily} onSelect={handleFontChange} />
 
             {/* Font Size (Standalone Row) */}
             <ScrubbableInput

@@ -1331,12 +1331,15 @@ const loadFonts = () => {
   console.log("✅ All fonts registered successfully!");
 };
 
+// ------------------------------------------------------------------
+// 1. HELPER: Fetch Image & Convert to Base64
+// ------------------------------------------------------------------
 const fetchImageAsBase64 = async (url) => {
   try {
-    const response = await axios.get(url, { 
+    const response = await axios.get(url, {
       responseType: 'arraybuffer',
       headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 10000 
+      timeout: 10000
     });
     const buffer = Buffer.from(response.data, 'binary');
     const contentType = response.headers['content-type'] || 'image/png';
@@ -1348,95 +1351,198 @@ const fetchImageAsBase64 = async (url) => {
 };
 
 // ------------------------------------------------------------------
-// 🛠️ UNIVERSAL OBJECT FIXER (Recursive)
+// 2. HELPER: Recursive JSON Processor (The Missing Function!)
 // ------------------------------------------------------------------
-// This function dives into Groups to fix text/layout issues at every level
-function fixCanvasObject(obj) {
-  if (!obj) return;
+// This digs into groups to find images and swap URLs for Base64
+async function processCanvasObjects(objects) {
+  if (!objects || !Array.isArray(objects)) return [];
 
-  // 1. GLOBAL FIX: Disable Caching & Force Coordinate Update
-  // This prevents "blurry" or "shifted" rendering at high resolutions
-  obj.set({
-    objectCaching: false,
-    dirty: true,
-    noScaleCache: false // Force redraw
-  });
-  obj.setCoords();
+  const promises = objects.map(async (obj) => {
+    if (!obj) return null;
 
-  // 2. TEXT FIX: Force Re-measurement
-  // Solves the "congested" or "overlapped" font issue
-  if (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'textbox') {
-    const originalText = obj.text;
-    
-    // Hack to force node-canvas to re-calculate glyph widths
-    obj.set('text', ' '); 
-    obj.set('text', originalText);
+    // Clone to avoid mutating original if needed
+    // let newObj = { ...obj }; 
+    let newObj = obj;
 
-    // Specific fix for Textbox wrapping issues
-    if (obj.type === 'textbox') {
-       // Force width recalculation based on server fonts
-       obj.initDimensions(); 
+    // A. RECURSION: If it's a Group, dive into its objects
+    if (newObj.type === 'group' && Array.isArray(newObj.objects)) {
+      newObj.objects = await processCanvasObjects(newObj.objects);
+      return newObj;
     }
-  }
 
-  // 3. GROUP FIX: Recursive Dive
-  // If this object is a Group, we must fix its children too
-  if (obj.type === 'group' && obj.getObjects) {
-    obj.getObjects().forEach((child) => {
-      fixCanvasObject(child); // <--- RECURSION HAPPENS HERE
-    });
+    // B. IMAGE PROCESSING: Swap URL for Base64
+    // We check for both 'image' and 'Image' to be safe
+    const type = (newObj.type || '').toLowerCase();
 
-    // Optional: Recalculate group bounds after fixing children
-    // Use this only if the group box itself looks wrong
-    // obj.addWithUpdate(); 
-  }
+    if (type === 'image') {
+      // Priority: High-Res Print Source > Standard Source
+      let urlToLoad = newObj.print_src || newObj.src;
+
+      // Scaling Logic for High-Res swap
+      if (newObj.print_src && newObj.originalWidth && newObj.originalHeight) {
+        const scaleXRatio = newObj.width / newObj.originalWidth;
+        const scaleYRatio = newObj.height / newObj.originalHeight;
+        newObj.scaleX = (newObj.scaleX || 1) * scaleXRatio;
+        newObj.scaleY = (newObj.scaleY || 1) * scaleYRatio;
+        newObj.width = newObj.originalWidth;
+        newObj.height = newObj.originalHeight;
+      }
+
+      // Download & Convert
+      if (urlToLoad && urlToLoad.startsWith('http')) {
+        const base64 = await fetchImageAsBase64(urlToLoad);
+        if (base64) {
+          newObj.src = base64; // ✅ Replaced!
+        } else {
+          console.warn(`❌ Removing failed image object (${newObj.type})`);
+          return null; // 🛑 Remove object to prevent crash
+        }
+      }
+    }
+
+    return newObj;
+  });
+
+  // Wait for all downloads in this layer
+  const results = await Promise.all(promises);
+
+  // Filter out the nulls (failed downloads)
+  return results.filter(Boolean);
 }
 
 // ------------------------------------------------------------------
-// 🎨 SERVER SIDE RENDERER (Updated)
+// 4. MAIN: Server Side Renderer (PUPPETEER + DYNAMIC FONTS)
 // ------------------------------------------------------------------
 async function renderDesignServerSide(designJson, productId, view = 'front') {
-  const dims = PRODUCT_DIMENSIONS[productId] || { canvas: { w: 420, h: 560 }, print: { front: { w: 2400, h: 3200 } } };
+  const baseW = designJson.width || 420;
+  const baseH = designJson.height || 560;
+
+  const dims = PRODUCT_DIMENSIONS[productId] || { print: { front: { w: 2400, h: 3200 } } };
   const targetW = dims.print[view]?.w || 2400;
-  const targetH = dims.print[view]?.h || 3200;
-  const scale = targetW / dims.canvas.w;
 
-  const canvas = new StaticCanvas(null, { width: targetW, height: targetH });
+  const exportMultiplier = targetW / baseW;
 
-  // 1. Pre-process JSON (Your existing Image Swapper)
-  const sanitizedJson = await processCanvasObjects(designJson);
+  const objectsArray = designJson.objects || [];
+  const sanitizedObjects = await processCanvasObjects(objectsArray);
+  designJson.objects = sanitizedObjects;
 
-  if (sanitizedJson.length === 0) {
-    console.warn("⚠️ Warning: Canvas is empty after processing.");
+  if (sanitizedObjects.length === 0) {
+    console.warn(`⚠️ Warning: Canvas is empty for ${view} view.`);
   }
 
+  // =========================================================
+  // 🧠 THE FIX: Clean Font Scanner & System Font Filter
+  // =========================================================
+  const extractUsedFonts = (objects) => {
+    let fonts = new Set();
+    const traverse = (objs) => {
+      if (!objs || !Array.isArray(objs)) return;
+      objs.forEach(obj => {
+        const type = (obj.type || '').toLowerCase();
+        if (type === 'text' || type === 'i-text' || type === 'textbox') {
+          if (obj.fontFamily) {
+            // Remove extra quotes Fabric sometimes adds (e.g., '"Open Sans"')
+            let cleanFont = obj.fontFamily.replace(/['"]/g, '').trim();
+            fonts.add(cleanFont);
+          }
+        }
+        if (type === 'group' && obj.objects) traverse(obj.objects);
+      });
+    };
+    traverse(objects);
+    return Array.from(fonts);
+  };
+
+  const usedFonts = extractUsedFonts(designJson.objects);
+
+  // Filter out Apple/Windows System Fonts so Google Fonts API doesn't crash!
+  const systemFonts = [
+      'Arial', 'Helvetica', 'Helvetica Neue', 'HelveticaNeue', 
+      'Times New Roman', 'Courier New', 'Verdana', 'Georgia', 
+      'Comic Sans MS', 'Impact', 'Trebuchet MS'
+  ];
+  const googleFontsToLoad = usedFonts.filter(f => !systemFonts.includes(f));
+  // =========================================================
+
+  // 🚀 LAUNCH HEADLESS CHROME
+  const browser = await puppeteer.launch({
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    executablePath: await chromium.executablePath(),
+    headless: chromium.headless,
+  });
+
   try {
-    // 2. Load JSON into Fabric
-    await canvas.loadFromJSON({ version: "6.9.0", objects: sanitizedJson });
+    const page = await browser.newPage();
 
-    // 3. 🛡️ RUN THE UNIVERSAL FIXER
-    // This loops through every object on the canvas and fixes it
-    canvas.getObjects().forEach((obj) => {
-      fixCanvasObject(obj);
-    });
+    // 🌐 THE HTML: Powered by Google WebFontLoader
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>body { margin: 0; padding: 0; background: transparent; }</style>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>
+      </head>
+      <body>
+        <canvas id="c" width="${baseW}" height="${baseH}"></canvas>
 
-    // 4. Apply Scale & Render
-    canvas.setZoom(scale);
-    canvas.setViewportTransform([scale, 0, 0, scale, 0, 0]);
-    canvas.width = targetW;
-    canvas.height = targetH;
-    
-    canvas.renderAll();
+        <script>
+           window.renderComplete = false;
+           window.canvasDataUrl = "";
 
-    const dataUrl = canvas.toDataURL({ format: 'png', multiplier: 1 });
+           // 2. This ONLY runs after fonts are verified active
+           function renderFabric() {
+               const canvas = new fabric.StaticCanvas('c');
+               const json = ${JSON.stringify(designJson)};
+
+               canvas.loadFromJSON(json, function() {
+                   canvas.renderAll();
+                   
+                   window.canvasDataUrl = canvas.toDataURL({
+                       format: 'png',
+                       multiplier: ${exportMultiplier}
+                   });
+                   
+                   window.renderComplete = true; // Signal Node.js
+               });
+           }
+
+           // 1. Ask WebFontLoader to fetch exactly the families we need
+           const fontsToLoad = ${JSON.stringify(googleFontsToLoad)};
+
+           if (fontsToLoad.length > 0) {
+               WebFont.load({
+                   google: { families: fontsToLoad },
+                   active: renderFabric,     // Success: Fonts are painted, start Fabric!
+                   inactive: renderFabric,   // Fallback: A font typo occurred, render anyway so it doesn't crash.
+                   timeout: 10000            // 10 second safety net
+               });
+           } else {
+               // No web fonts used, just render immediately
+               renderFabric();
+           }
+        </script>
+      </body>
+      </html>
+    `;
+
+    // Fast HTML load
+    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+    // Wait for Fabric to finish
+    await page.waitForFunction('window.renderComplete === true', { timeout: 90000 });
+    const dataUrl = await page.evaluate(() => window.canvasDataUrl);
+
+    await browser.close();
+
     const buffer = Buffer.from(dataUrl.replace(/^data:image\/png;base64,/, ""), 'base64');
-    
-    canvas.dispose();
     return buffer;
 
   } catch (err) {
-    console.error("Fabric Rendering Error:", err);
-    throw new Error("Failed to render design");
+    await browser.close();
+    console.error("Rendering Error:", err);
+    throw new Error("Rendering failed: " + err.message);
   }
 }
 
@@ -1465,13 +1571,13 @@ exports.processNewOrder = functions
       // A. Generate Print Files
       for (const view of views) {
         const designJson = item.designData?.canvasViewStates?.[view] || item.designData?.viewStates?.[view];
-        
+
         // Skip if this view has no design data
         if (!designJson || designJson.length === 0) continue;
 
         const bucket = admin.storage().bucket();
         const file = bucket.file(`orders/${orderId}/print_${view}.png`);
-      
+
 
         // 1. Get the Buffer from the renderer
         // Note: We removed the 'file' argument because the function returns the data now
@@ -1683,103 +1789,103 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 // 💰 2. RAZORPAY WEBHOOK (Updated for Split Orders)
 // ------------------------------------------------------------------
 exports.razorpayWebhook = functions
-.runWith({ timeoutSeconds: 300, memory: '1GB' })
-.https.onRequest(async (req, res) => {
-  const signature = req.headers["x-razorpay-signature"];
-  const secret = functions.config().razorpay?.webhook_secret;
+  .runWith({ timeoutSeconds: 300, memory: '1GB' })
+  .https.onRequest(async (req, res) => {
+    const signature = req.headers["x-razorpay-signature"];
+    const secret = functions.config().razorpay?.webhook_secret;
 
-  // 1. Verify Signature
-  if (!Razorpay.validateWebhookSignature(JSON.stringify(req.body), signature, secret)) {
-    return res.status(400).send("Invalid Signature");
-  }
-
-  const payload = req.body.payload.payment.entity;
-  const notes = payload.notes || {};
-  
-  // 🔍 KEY FIX: Look for groupId (Split Orders) OR orderId (Legacy/Single)
-  const groupId = notes.groupId;
-  const specificOrderId = notes.orderId;
-
-  const amountPaid = payload.amount / 100; // Razorpay is in paise
-
-  try {
-    let ordersToUpdate = [];
-
-    // SCENARIO A: Split Order (The new standard)
-    if (groupId) {
-      const q = db.collection('orders').where('groupId', '==', groupId);
-      const snapshot = await q.get();
-      
-      if (snapshot.empty) {
-        console.error(`❌ Webhook: No orders found for Group ID ${groupId}`);
-        return res.status(404).send("Orders not found");
-      }
-      ordersToUpdate = snapshot.docs;
-    } 
-    // SCENARIO B: Single Order (Legacy fallback)
-    else if (specificOrderId) {
-      const doc = await db.collection('orders').doc(specificOrderId).get();
-      if (!doc.exists) return res.status(404).send("Order not found");
-      ordersToUpdate = [doc];
-    } 
-    else {
-      console.error("❌ Webhook: Missing groupId or orderId in notes");
-      return res.status(400).send("Invalid logic");
+    // 1. Verify Signature
+    if (!Razorpay.validateWebhookSignature(JSON.stringify(req.body), signature, secret)) {
+      return res.status(400).send("Invalid Signature");
     }
 
-    // 2. 🛡️ FRAUD CHECK (Check the first order as reference)
-    const firstOrderData = ordersToUpdate[0].data();
-    const expectedAmount = firstOrderData.payment.total; // Every split doc has the grand total
+    const payload = req.body.payload.payment.entity;
+    const notes = payload.notes || {};
 
-    if (Math.abs(amountPaid - expectedAmount) > 5) { // 5 Rupee buffer for rounding
-      const fraudMsg = `FRAUD: Group ${groupId || specificOrderId} paid ${amountPaid} but expected ${expectedAmount}`;
-      console.error(`🚨 ${fraudMsg}`);
+    // 🔍 KEY FIX: Look for groupId (Split Orders) OR orderId (Legacy/Single)
+    const groupId = notes.groupId;
+    const specificOrderId = notes.orderId;
 
-      // Flag all orders as fraud
+    const amountPaid = payload.amount / 100; // Razorpay is in paise
+
+    try {
+      let ordersToUpdate = [];
+
+      // SCENARIO A: Split Order (The new standard)
+      if (groupId) {
+        const q = db.collection('orders').where('groupId', '==', groupId);
+        const snapshot = await q.get();
+
+        if (snapshot.empty) {
+          console.error(`❌ Webhook: No orders found for Group ID ${groupId}`);
+          return res.status(404).send("Orders not found");
+        }
+        ordersToUpdate = snapshot.docs;
+      }
+      // SCENARIO B: Single Order (Legacy fallback)
+      else if (specificOrderId) {
+        const doc = await db.collection('orders').doc(specificOrderId).get();
+        if (!doc.exists) return res.status(404).send("Order not found");
+        ordersToUpdate = [doc];
+      }
+      else {
+        console.error("❌ Webhook: Missing groupId or orderId in notes");
+        return res.status(400).send("Invalid logic");
+      }
+
+      // 2. 🛡️ FRAUD CHECK (Check the first order as reference)
+      const firstOrderData = ordersToUpdate[0].data();
+      const expectedAmount = firstOrderData.payment.total; // Every split doc has the grand total
+
+      if (Math.abs(amountPaid - expectedAmount) > 5) { // 5 Rupee buffer for rounding
+        const fraudMsg = `FRAUD: Group ${groupId || specificOrderId} paid ${amountPaid} but expected ${expectedAmount}`;
+        console.error(`🚨 ${fraudMsg}`);
+
+        // Flag all orders as fraud
+        const batch = db.batch();
+        ordersToUpdate.forEach(doc => {
+          batch.update(doc.ref, {
+            status: 'fraud_alert',
+            fraudReason: fraudMsg,
+            'payment.status': 'fraud_flagged'
+          });
+        });
+        await batch.commit();
+
+        return res.status(200).send("Fraud Detected");
+      }
+
+      // 3. ✅ SUCCESS: Batch Update All Orders
       const batch = db.batch();
+
       ordersToUpdate.forEach(doc => {
-        batch.update(doc.ref, {
-          status: 'fraud_alert',
-          fraudReason: fraudMsg,
-          'payment.status': 'fraud_flagged'
-        });
+        // Only update if not already paid (idempotency)
+        if (doc.data().status !== 'placed') {
+          batch.update(doc.ref, {
+            status: 'placed',
+            'payment.status': 'paid',
+            'payment.transactionId': payload.id,
+            providerStatus: 'pending', // 🟢 Wakes up the fulfillment bot
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
       });
+
       await batch.commit();
-      
-      return res.status(200).send("Fraud Detected");
+      console.log(`✅ Webhook: Updated ${ordersToUpdate.length} orders for Group ${groupId || specificOrderId}`);
+
+      // 4. Send Invoice (Consolidated)
+      // We pass the raw data of all docs to generate one big invoice
+      const allOrderData = ordersToUpdate.map(d => d.data());
+      await generateAndSendConsolidatedInvoice(allOrderData);
+
+      res.status(200).send("OK");
+
+    } catch (error) {
+      console.error("Webhook Error:", error);
+      res.status(500).send("Internal Server Error");
     }
-
-    // 3. ✅ SUCCESS: Batch Update All Orders
-    const batch = db.batch();
-    
-    ordersToUpdate.forEach(doc => {
-      // Only update if not already paid (idempotency)
-      if (doc.data().status !== 'placed') {
-        batch.update(doc.ref, {
-          status: 'placed',
-          'payment.status': 'paid',
-          'payment.transactionId': payload.id,
-          providerStatus: 'pending', // 🟢 Wakes up the fulfillment bot
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-      }
-    });
-
-    await batch.commit();
-    console.log(`✅ Webhook: Updated ${ordersToUpdate.length} orders for Group ${groupId || specificOrderId}`);
-
-    // 4. Send Invoice (Consolidated)
-    // We pass the raw data of all docs to generate one big invoice
-    const allOrderData = ordersToUpdate.map(d => d.data());
-    await generateAndSendConsolidatedInvoice(allOrderData);
-
-    res.status(200).send("OK");
-
-  } catch (error) {
-    console.error("Webhook Error:", error);
-    res.status(500).send("Internal Server Error");
-  }
-});
+  });
 
 exports.sendConsolidatedInvoice = functions
   .runWith({ memory: '1GB', timeoutSeconds: 120 })

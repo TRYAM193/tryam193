@@ -82,7 +82,7 @@ export default function MobileEditorLayout({
             {/* 1. TOP HEADER */}
             <div className="absolute top-0 left-0 w-full z-30 px-4 py-3 flex justify-between items-center bg-gradient-to-b from-[#0f172a]/90 to-transparent pointer-events-none">
                 <div className="flex gap-2 pointer-events-auto">
-                    <button onClick={() => navigation(-1)} className="w-9 h-9 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white border border-white/5"><ArrowLeft size={18} /></button>
+                    <button onClick={() => navigation('/dashboard')} className="w-9 h-9 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white border border-white/5"><ArrowLeft size={18} /></button>
                 </div>
                 <div className="flex gap-2 pointer-events-auto bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10">
                     <button onClick={onUndo} disabled={!canUndo} className={`w-9 h-9 rounded-full flex items-center justify-center ${!canUndo ? 'text-white/20' : 'text-white'}`}><Undo2 size={18} /></button>

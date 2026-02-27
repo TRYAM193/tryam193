@@ -47,6 +47,46 @@ function removeUndefined(obj) {
     return obj;
 }
 
+const preloadFontsFromObjects = async (objects) => {
+    if (!objects || !Array.isArray(objects)) return;
+
+    // 1. Scan for used fonts
+    const fonts = new Set();
+    const traverse = (objs) => {
+        objs.forEach(obj => {
+            const type = (obj.type || '').toLowerCase();
+            if ((type === 'text' || type === 'i-text' || type === 'textbox') && obj.fontFamily) {
+                fonts.add(obj.fontFamily.replace(/['"]/g, '').trim());
+            }
+            if (type === 'group' && obj.objects) traverse(obj.objects);
+        });
+    };
+    traverse(objects);
+
+    const uniqueFonts = Array.from(fonts).filter(f => !['Arial', 'Helvetica', 'Times New Roman'].includes(f));
+    if (uniqueFonts.length === 0) return;
+
+    // 2. Build Google Fonts URL
+    const families = uniqueFonts.map(font => `${font.replace(/ /g, '+')}:ital,wght@0,400;0,700;1,400;1,700`).join('&family=');
+    const fontUrl = `https://fonts.googleapis.com/css2?family=${families}&display=swap`;
+
+    // 3. Inject CSS into the document head if it's not already there
+    let link = document.querySelector(`link[href="${fontUrl}"]`);
+    if (!link) {
+        link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = fontUrl;
+        document.head.appendChild(link);
+    }
+
+    // 4. Force the browser to wait until the fonts are painted
+    await document.fonts.ready;
+
+    // 5. Explicitly command the browser to load them into memory to prevent race conditions
+    const loadPromises = uniqueFonts.map(font => document.fonts.load(`16px "${font}"`).catch(() => { }));
+    await Promise.all(loadPromises);
+};
+
 
 const CURRENCY_MAP = {
     IN: { symbol: '₹', code: 'INR' },
@@ -355,6 +395,8 @@ export default function EditorPanel() {
                     const activeView = designData.productConfig.activeView || 'front';
                     setCurrentView(activeView);
                     const activeObjects = savedStates[activeView] || [];
+
+                    await preloadFontsFromObjects(designData.canvasData);
                     dispatch(setCanvasObjects(activeObjects));
 
                     setSearchParams(prev => {
@@ -371,6 +413,7 @@ export default function EditorPanel() {
                     : (designData.canvasData?.front || []);
 
                 // Replace Canvas
+                await preloadFontsFromObjects(designData.canvasData);
                 dispatch(setCanvasObjects(incomingObjects));
                 setEditingDesignId(designData.id);
                 setCurrentDesign(designData);
@@ -404,6 +447,7 @@ export default function EditorPanel() {
 
                     // B. THE JOB IS DONE HERE 👇
                     if (templateData.canvasData) {
+                        await preloadFontsFromObjects(templateData.canvasData);
                         dispatch(setCanvasObjects(templateData.canvasData));
                     }
 
@@ -752,11 +796,15 @@ export default function EditorPanel() {
         const currentReduxState = store.getState().canvas.present;
         setViewStates(prev => ({ ...prev, [currentView]: currentReduxState }));
 
-        // 2. ✅ NEW: Capture Full Canvas JSON (For Headless Render)
         const currentJSON = fabricCanvas.toObject(['customId', 'textStyle', 'textEffect', 'radius', 'effectValue', 'selectable', 'lockMovementX', 'lockMovementY', 'print_src', 'originalWidth', 'originalHeight']);
-        let currentObjects = currentJSON.objects || [];
-        currentObjects = currentObjects.map((obj) => removeUndefined(obj))
-        setCanvasViewStates(prev => ({ ...prev, [currentView]: currentObjects }));
+
+        // 🛑 THE RESPONSIVE ZOOM FIX
+        const currentZoom = fabricCanvas.getZoom() || 1;
+        currentJSON.width = Math.round(fabricCanvas.width / currentZoom);
+        currentJSON.height = Math.round(fabricCanvas.height / currentZoom);
+
+        currentJSON.objects = (currentJSON.objects || []).map((obj) => removeUndefined(obj));
+        setCanvasViewStates(prev => ({ ...prev, [currentView]: currentJSON }));
 
         // 3. Switch View
         setCurrentView(newView);
@@ -804,27 +852,30 @@ export default function EditorPanel() {
         }, 50);
     };
 
-    // ✅ 🚀 INSTANT PAYLOAD GENERATOR
+    // --------------------------------------------------
+    // ✅ ULTRA-FAST PAYLOAD GENERATOR (No Browser Crashing)
+    // --------------------------------------------------
     const generateOrderPayload = async () => {
-        // 1. Snapshot CURRENT Redux state (For Editor)
         const currentReduxState = store.getState().canvas.present;
-        const tempViewStates = {
-            ...viewStates,
-            [currentView]: currentReduxState
-        };
+        const tempViewStates = { ...viewStates, [currentView]: currentReduxState };
 
-        // 2. ✅ NEW: Snapshot CURRENT Fabric JSON (For Headless Render)
-        let currentObjects = [];
+        // 2. Snapshot CURRENT Fabric JSON (The Print Reality)
+        let currentCanvasJson = null;
         if (fabricCanvas) {
-            const json = fabricCanvas.toObject(['customId', 'textStyle', 'textEffect', 'radius', 'effectValue', 'selectable', 'lockMovementX', 'lockMovementY', 'print_src', 'originalWidth', 'originalHeight']);
-            currentObjects = json.objects || [];
-            currentObjects = currentObjects.map((obj) => removeUndefined(obj))
-        }
-        const tempCanvasViewStates = {
-            ...canvasViewStates,
-            [currentView]: currentObjects
-        };
+            currentCanvasJson = fabricCanvas.toObject(['customId', 'textStyle', 'textEffect', 'radius', 'effectValue', 'selectable', 'lockMovementX', 'lockMovementY', 'print_src', 'originalWidth', 'originalHeight']);
 
+            // 🛑 THE RESPONSIVE ZOOM FIX
+            // Divide physical width by zoom to get the true logical dimensions (e.g. 420x560)
+            const currentZoom = fabricCanvas.getZoom() || 1;
+            currentCanvasJson.width = Math.round(fabricCanvas.width / currentZoom);
+            currentCanvasJson.height = Math.round(fabricCanvas.height / currentZoom);
+
+            currentCanvasJson.objects = (currentCanvasJson.objects || []).map((obj) => removeUndefined(obj));
+        }
+
+        const tempCanvasViewStates = { ...canvasViewStates, [currentView]: currentCanvasJson };
+
+        // Upload local images to Firebase
         async function updateImgSrc(objects = []) {
             return Promise.all(
                 objects.map(async (obj) => {
@@ -832,34 +883,29 @@ export default function EditorPanel() {
                     if (!obj.src) return obj;
 
                     const isLocalImage = obj.src.startsWith('blob:') || obj.src.startsWith('data:');
-
-                    if (!isLocalImage) {
-                        return obj;
-                    }
+                    if (!isLocalImage) return obj;
 
                     const imgSrc = await uploadToStorage(obj.src, `images/${Date.now()}_${uuidv4()}`);
-
-                    return {
-                        ...obj,
-                        src: imgSrc
-                    };
+                    return { ...obj, src: imgSrc, print_src: imgSrc };
                 })
             );
         }
+
         async function updateAllSides(design) {
             const result = {};
-
             for (const side in design) {
-                result[side] = await updateImgSrc(design[side]);
+                const sideJson = design[side];
+                if (sideJson && sideJson.objects) {
+                    sideJson.objects = await updateImgSrc(sideJson.objects);
+                }
+                result[side] = sideJson;
             }
-
             return result;
         }
-        const updatedObjects = await updateAllSides(tempCanvasViewStates);
 
-        // 3. Construct Payload
+        const updatedCanvasJsonViews = await updateAllSides(tempCanvasViewStates);
         const baseImage = productData.image || productData.mockups?.front || "/assets/placeholder.png";
-        const colorName = Object.keys(COLOR_MAP).find(key => COLOR_MAP[key] === canvasBg)
+        const colorName = Object.keys(COLOR_MAP).find(key => COLOR_MAP[key] === canvasBg);
 
         return {
             designId: editingDesignId || `temp_${Date.now()}`,
@@ -869,14 +915,11 @@ export default function EditorPanel() {
             quantity: quantity,
             price: currentPrice || 0,
             currency: currencyInfo,
-
             thumbnail: baseImage,
             highResGenerated: false,
-
-            // ✅ THE IMPORTANT PART: We keep BOTH states now!
             designData: {
-                viewStates: tempViewStates,       // For Editor (Redux)
-                canvasViewStates: updatedObjects, // For Renderer (Fabric JSON)
+                viewStates: tempViewStates,
+                canvasViewStates: updatedCanvasJsonViews,
                 currentView: currentView
             },
             createdAt: new Date().toISOString()

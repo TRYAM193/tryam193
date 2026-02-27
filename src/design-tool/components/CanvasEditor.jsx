@@ -615,9 +615,24 @@ export default function CanvasEditor({
         if (['text', 'textbox', 'i-text'].includes(objData.type) || shapes.includes(objData.type)) {
           const curvedEffects = ['circle', 'semicircle', 'arc-up', 'arc-down', 'flag'];
           const isCurved = curvedEffects.includes(objData.props.textEffect);
+
           if (existing && existing.type === objData.type && !isCurved) {
+            // 1. Apply the new properties (like the new font)
             existing.set(objData.props);
+
+            // 2. 🛑 THE FIX: Force Fabric to rebuild the selectable bounding box
+            if (['text', 'textbox', 'i-text'].includes(existing.type)) {
+              // Erase Fabric's cached memory of the old font's dimensions
+              delete existing.__charBounds;
+              delete existing.__lineWidths;
+              if (existing.type !== 'textbox') {
+                delete existing.width;
+                delete existing.height;
+              }
+              existing.initDimensions();
+            }
             existing.setCoords();
+
           } else {
             if (existing) fabricCanvas.remove(existing);
             let newObj;
@@ -628,7 +643,7 @@ export default function CanvasEditor({
             if (newObj) {
               newObj.customId = objData.id;
               fabricCanvas.add(newObj);
-              fabricCanvas.requestRenderAll()
+              fabricCanvas.requestRenderAll();
             }
           }
         }

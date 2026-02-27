@@ -5,7 +5,8 @@ import {
     Ban, Circle, Smile, Frown, Flag,
     Loader2, Eraser, ArrowUp, ArrowDown,
     ArrowUpFromLine, ArrowDownToLine, ImagePlus,
-    Type, Droplets, Move, Sun, Maximize2, CheckCircle2
+    Type, Droplets, Move, Sun, Maximize2, CheckCircle2,
+    AlignLeft, AlignCenter, AlignRight
 } from 'lucide-react';
 import { AVAILABLE_FONTS } from '@/data/font';
 import { COLOR_MAP } from '@/lib/colorMaps';
@@ -235,7 +236,6 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
 
     const fileInputRef = useRef(null);
     const [isProcessing, setIsProcessing] = useState(false);
-    const isSvg = activeObject?.customType === 'svg';
 
     const getValue = (key) => object.props?.[key] ?? object[key];
     const handleUpdate = (key, value) => updateObject(object.id, { [key]: value });
@@ -267,6 +267,62 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
             // Commit to Redux
             updateObject(object.id, { scaleX: newScaleX, scaleY: newScaleY });
             updateDpiForObject(fabricCanvas.getObjects().find(o => o.customId === object.id))
+        }
+    };
+
+    // 🔤 BULLETPROOF FONT LOADER (Mobile Version)
+    const handleFontChange = (newFont) => {
+        // Instantly update the Redux state so the UI button highlights immediately
+        handleUpdate('fontFamily', newFont);
+
+        const applyToFabric = () => {
+            if (!fabricCanvas) return;
+
+            const activeObj = fabricCanvas.getObjects().find(o => o.customId === object.id);
+            if (activeObj && ['text', 'i-text', 'textbox'].includes(activeObj.type)) {
+                // Set the new font
+                activeObj.set('fontFamily', newFont);
+
+                // Clear old Arial cache bounds
+                delete activeObj.__charBounds;
+                delete activeObj.__lineWidths;
+
+                // Force proper measurement of the new font
+                activeObj.initDimensions();
+                activeObj.setCoords();
+                fabricCanvas.requestRenderAll();
+
+                // Final commit to ensure state is perfectly synced
+                updateObject(object.id, { fontFamily: newFont });
+                setTimeout(() => {
+                    fabricCanvas.requestRenderAll();
+                }, 1000)
+            }
+        };
+
+        const loadWebFont = () => {
+            window.WebFont.load({
+                google: { families: [`${newFont}:400,700,400i,700i`] },
+                active: () => {
+                    // 🎉 FONT IS 100% READY AND PAINTED. Safe to draw!
+                    applyToFabric();
+                },
+                inactive: () => {
+                    console.warn(`WebFontLoader failed to load: ${newFont}. Falling back.`);
+                    applyToFabric(); // Fallback just in case
+                },
+                timeout: 5000 // 5 second safety net
+            });
+        };
+
+        // Inject WebFontLoader if it isn't already on the page
+        if (!window.WebFont) {
+            const script = document.createElement('script');
+            script.src = 'https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js';
+            script.onload = loadWebFont;
+            document.head.appendChild(script);
+        } else {
+            loadWebFont();
         }
     };
 
@@ -474,21 +530,37 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
         case 'fontFamily': title = "Font"; content = (
             <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto pr-1">
                 {AVAILABLE_FONTS.map(font => (
-                    <button key={font} onClick={() => handleUpdate('fontFamily', font)} className={`text-left px-4 py-3 rounded-lg border transition-all ${getValue('fontFamily') === font ? 'border-orange-500 bg-orange-500/10 text-orange-400' : 'border-white/5 text-slate-300 hover:bg-white/5'}`} style={{ fontFamily: font }}>{font}</button>
+                    <button key={font} onClick={() => handleFontChange(font)} className={`text-left px-4 py-3 rounded-lg border transition-all ${getValue('fontFamily') === font ? 'border-orange-500 bg-orange-500/10 text-orange-400' : 'border-white/5 text-slate-300 hover:bg-white/5'}`} style={{ fontFamily: font }}>{font}</button>
                 ))}
             </div>
         ); break;
-        case 'format': title = "Style"; content = (
-            <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl border border-white/5">
-                {[
-                    { key: 'fontWeight', val: 'bold', icon: Bold, active: getValue('fontWeight') === 'bold', fn: () => handleUpdate('fontWeight', getValue('fontWeight') === 'bold' ? 'normal' : 'bold') },
-                    { key: 'fontStyle', val: 'italic', icon: Italic, active: getValue('fontStyle') === 'italic', fn: () => handleUpdate('fontStyle', getValue('fontStyle') === 'italic' ? 'normal' : 'italic') },
-                    { key: 'underline', val: true, icon: Underline, active: getValue('underline'), fn: () => handleUpdate('underline', !getValue('underline')) },
-                ].map((btn, i) => (
-                    <button key={i} onClick={btn.fn} className={`flex-1 py-3 rounded-lg flex items-center justify-center transition-all ${btn.active ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-white'}`}>
-                        <btn.icon size={20} />
-                    </button>
-                ))}
+        case 'format': title = "Text Style"; content = (
+            <div className="flex flex-col gap-3">
+                {/* Row 1: Bold, Italic, Underline */}
+                <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl border border-white/5">
+                    {[
+                        { key: 'fontWeight', val: 'bold', icon: Bold, active: getValue('fontWeight') === 'bold', fn: () => handleUpdate('fontWeight', getValue('fontWeight') === 'bold' ? 'normal' : 'bold') },
+                        { key: 'fontStyle', val: 'italic', icon: Italic, active: getValue('fontStyle') === 'italic', fn: () => handleUpdate('fontStyle', getValue('fontStyle') === 'italic' ? 'normal' : 'italic') },
+                        { key: 'underline', val: true, icon: Underline, active: getValue('underline'), fn: () => handleUpdate('underline', !getValue('underline')) },
+                    ].map((btn, i) => (
+                        <button key={i} onClick={btn.fn} className={`flex-1 py-3 rounded-lg flex items-center justify-center transition-all ${btn.active ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-white'}`}>
+                            <btn.icon size={20} />
+                        </button>
+                    ))}
+                </div>
+
+                {/* ✅ Row 2: Alignment Options */}
+                <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl border border-white/5">
+                    {[
+                        { val: 'left', icon: AlignLeft, active: getValue('textAlign') === 'left' || !getValue('textAlign'), fn: () => handleUpdate('textAlign', 'left') },
+                        { val: 'center', icon: AlignCenter, active: getValue('textAlign') === 'center', fn: () => handleUpdate('textAlign', 'center') },
+                        { val: 'right', icon: AlignRight, active: getValue('textAlign') === 'right', fn: () => handleUpdate('textAlign', 'right') },
+                    ].map((btn, i) => (
+                        <button key={`align-${i}`} onClick={btn.fn} className={`flex-1 py-3 rounded-lg flex items-center justify-center transition-all ${btn.active ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-white'}`}>
+                            <btn.icon size={20} />
+                        </button>
+                    ))}
+                </div>
             </div>
         ); break;
         case 'effect': title = "Text Effects"; content = (

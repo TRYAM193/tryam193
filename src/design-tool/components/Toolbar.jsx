@@ -6,6 +6,7 @@ import {
   FiAlignLeft, FiAlignCenter, FiAlignRight, FiType, FiDroplet, FiZap,
   FiChevronDown, FiCheck, FiSun, FiMaximize2, FiCheckCircle
 } from 'react-icons/fi';
+import { Type, MoveHorizontal } from 'lucide-react';
 import CircleText from '../objectAdders/CircleText';
 import { Path } from 'fabric';
 import {
@@ -19,7 +20,7 @@ import { FONTS } from '../../data/font.js'
 
 // --- 🎨 UI COMPONENTS ---
 
-const ScrubbableInput = ({ label, value, min, max, step = 1, onChange, onCommit, icon: Icon }) => {
+const ScrubbableInput = ({ label, value, min, max, step = 1, onChange, onCommit, icon: Icon, icon2: Icon2 }) => {
   const startX = useRef(0);
   const startVal = useRef(0);
 
@@ -70,7 +71,10 @@ const ScrubbableInput = ({ label, value, min, max, step = 1, onChange, onCommit,
         className="flex items-center gap-1.5 cursor-ew-resize text-slate-400 hover:text-white select-none w-16"
         onMouseDown={handleMouseDown}
       >
-        {Icon ? <Icon size={12} /> : null}
+        <div className='flex flex-col gap-0.5'>
+          {Icon ? <Icon size={12} /> : null}
+          {Icon2 ? <Icon2 size={12} /> : null}
+        </div>
         <span className="text-[10px] font-bold uppercase">{label}</span>
       </div>
       <div className="flex-1 relative bg-slate-800/50 hover:bg-slate-800 rounded-md border border-white/5 overflow-hidden">
@@ -87,7 +91,7 @@ const ScrubbableInput = ({ label, value, min, max, step = 1, onChange, onCommit,
           min={min}
           max={max}
           className="w-full bg-transparent text-xs font-medium text-white px-2 py-1.5 focus:outline-none text-right relative z-10"
-          value={parseInt(value)}
+          value={parseInt(value) || ''}
           onChange={(e) => onChange(parseFloat(e.target.value))}
           onBlur={(e) => onCommit(parseFloat(e.target.value))}
           onKeyDown={(e) => e.key === 'Enter' && onCommit(parseFloat(e.currentTarget.value))}
@@ -264,7 +268,7 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
 
     // Use current canvas dimensions as proxy for Print Area (High Res Workflow)
     const dpiInfo = calculateImageDPI(
-      { ...object, width: object.props.width, height: object.props.height, scaleX: scaleX, scaleY: scaleY, getScaledWidth: () => object.props.width * scaleX, getScaledHeight: () => object.props.height * scaleY },
+      fabricCanvas.getObjects().find(o => o.customId === id),
       fabricCanvas.width,
       fabricCanvas.height,
       printDimensions.w || 4500,
@@ -556,6 +560,11 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
               label="Font Size" icon={FiType} value={liveProps.fontSize} min={10} max={200}
               onChange={(v) => handleLiveUpdate('fontSize', v)}
               onCommit={(v) => handleUpdateAndHistory('fontSize', v)}
+            />
+            <ScrubbableInput
+              label="Letter Spacing" icon={Type} icon2={MoveHorizontal} value={liveProps.charSpacing || 0} min={-50} max={500}
+              onChange={(v) => handleLiveUpdate('charSpacing', v)}
+              onCommit={(v) => handleUpdateAndHistory('charSpacing', v)}
             />
 
             {/* Outline (Standalone Section) */}

@@ -13,12 +13,12 @@ export default function Footer() {
           </h2>
           <p className="text-sm leading-relaxed">
             The easiest way to design and print custom apparel. 
-            Premium quality, AI-powered tools, shipped worldwide.
+            Premium quality, AI-powered tools, Ship all over INDIA.
           </p>
           <div className="flex gap-4 pt-2">
             <SocialIcon icon={Instagram} link={'https://www.instagram.com/tryam193/'} />
-            <SocialIcon icon={Youtube} />
-            <SocialIcon icon={Facebook} />
+            <SocialIcon icon={Youtube} link={'https://youtube.com/@tryam193?si=3cV_P5AZHwSXIXs2'} />
+            <SocialIcon icon={Facebook} link={'https://www.facebook.com/share/1HShoCdBuo/'} />
           </div>
         </div>
 

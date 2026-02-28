@@ -273,7 +273,7 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
     // 🔤 BULLETPROOF FONT LOADER (Mobile Version)
     const handleFontChange = (newFont) => {
         // Instantly update the Redux state so the UI button highlights immediately
-        handleUpdate('fontFamily', newFont);
+        // handleUpdate('fontFamily', newFont);
 
         const applyToFabric = () => {
             if (!fabricCanvas) return;

@@ -2,18 +2,19 @@ import React from 'react';
 import { X, ShoppingBag, CreditCard, Minus, Plus, Check } from 'lucide-react';
 import { COLOR_MAP } from '@/lib/colorMaps';
 import { Button } from '@/components/ui/button';
+import { PriceDisplay } from "@/components/PriceDisplay";
 
-export default function ProductDrawer({ 
-    product, 
-    selectedColor, 
-    setColor, 
-    selectedSize, 
-    setSize, 
-    quantity, 
-    setQuantity, 
-    onAddToCart, 
-    onBuyNow, 
-    isAddingToCart, 
+export default function ProductDrawer({
+    product,
+    selectedColor,
+    setColor,
+    selectedSize,
+    setSize,
+    quantity,
+    setQuantity,
+    onAddToCart,
+    onBuyNow,
+    isAddingToCart,
     isSaving,
     currencySymbol = '$',
     totalPrice,
@@ -31,12 +32,21 @@ export default function ProductDrawer({
 
             {/* Drawer Content */}
             <div className="relative w-full bg-[#1e293b] rounded-t-2xl p-6 pointer-events-auto animate-in slide-in-from-bottom duration-300 border-t border-white/10 max-w-md mx-auto">
-                
+
                 {/* Header */}
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h2 className="text-lg font-bold text-white">{product.title || "Custom Product"}</h2>
-                        <p className="text-orange-500 font-bold text-xl mt-1">{currencySymbol}{totalPrice}</p>
+                        <div>
+                            <p className="text-xs text-slate-400 mb-1">Total Price</p>
+                            <PriceDisplay
+                                // We pass unit price * quantity = totalPrice
+                                price={parseFloat(totalPrice)}
+                                currency={currencySymbol}
+                                productId={product.id}
+                                size="md"
+                            />
+                        </div>
                     </div>
                     <button onClick={onClose} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white">
                         <X size={20} />
@@ -92,15 +102,15 @@ export default function ProductDrawer({
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 pt-2">
-                        <Button 
-                            onClick={onAddToCart} 
+                        <Button
+                            onClick={onAddToCart}
                             disabled={isAddingToCart}
                             className="h-12 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl border border-white/10"
                         >
                             {isAddingToCart ? "Adding..." : <><ShoppingBag className="mr-2 h-4 w-4" /> Add to Cart</>}
                         </Button>
-                        <Button 
-                            onClick={onBuyNow} 
+                        <Button
+                            onClick={onBuyNow}
                             disabled={isSaving}
                             className="h-12 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold rounded-xl shadow-lg shadow-orange-900/40 border-0"
                         >

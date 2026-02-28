@@ -1650,6 +1650,13 @@ exports.processNewOrder = functions
     } catch (error) {
       console.error("❌ Bot Failed:", error);
       await change.after.ref.update({ providerStatus: 'error', botError: error.message });
+
+      await resend.emails.send({
+        from: 'System Alert <onboarding@resend.dev>',
+        to: ['tryam193@gmail.com', 'shreyaskumarswamy2007@gmail.com', 'cchiranjeevi.r789@gmail.com'],
+        subject: `🚨 Bot Failed: Order #${orderId}`,
+        html: `<p>The fulfillment bot crashed for order <b>${orderId}</b>.</p><p>Error: ${error.message}</p><p><a href="https://yourwebsite.com/admin/orders">Click here to open the Command Center and Retry.</a></p>`
+      });
     }
   });
 
@@ -1663,11 +1670,17 @@ exports.createRazorpayOrder = functions.https.onCall(async (data, context) => {
 });
 
 exports.createStripeIntent = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Login required');
-  try {
-    const paymentIntent = await stripe.paymentIntents.create({ amount: Math.round(data.amount * 100), currency: data.currency || "usd", automatic_payment_methods: { enabled: true } });
+    const { amount, currency, groupId } = data; // 👈 Receive the groupId
+
+    const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(amount * 100), // Stripe expects cents
+        currency: currency,
+        metadata: {
+            groupId: groupId // 👈 Attach it to metadata so the webhook can read it
+        }
+    });
+
     return { clientSecret: paymentIntent.client_secret };
-  } catch (error) { throw new functions.https.HttpsError('internal', error.message); }
 });
 
 exports.generateAiImage = functions.https.onCall(async (data, context) => {
@@ -1715,177 +1728,208 @@ exports.saveTshirtDesign = functions.https.onCall(async (data, context) => {
 });
 
 // ------------------------------------------------------------------
-// 💰 1. STRIPE WEBHOOK (Payment Confirmation)
+// 💰 1. RAZORPAY WEBHOOK (Group Orders, Fraud Check, Invoice)
 // ------------------------------------------------------------------
-exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
+const crypto = require("crypto");
 
-  try {
-    event = stripe.webhooks.constructEvent(req.rawBody, sig, functions.config().stripe.webhook_secret);
-  } catch (err) {
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const orderId = session.metadata.orderId;
-    const amountPaid = session.amount_total / 100; // Stripe is in cents
-
-    try {
-      // 1. 🔍 FETCH DATABASE ORDER
-      const orderRef = db.collection('orders').doc(orderId);
-      const doc = await orderRef.get();
-
-      if (!doc.exists) return res.status(404).send("Order missing");
-
-      const expectedAmount = doc.data().payment.total;
-
-      // 2. 🛡️ FRAUD CHECK
-      if (Math.abs(amountPaid - expectedAmount) > 1) {
-        const fraudMsg = `FRAUD DETECTED: Order ${orderId} paid ${amountPaid} but expected ${expectedAmount}`;
-        console.error(`🚨 ${fraudMsg}`);
-
-        // 1. Flag the Order
-        await orderRef.update({
-          status: 'fraud_alert',
-          fraudReason: fraudMsg,
-          payment: { ...orderData.payment, status: 'fraud_flagged' }
-        });
-
-        // 2. 🚫 BAN THE USER PERMANENTLY
-        const userId = orderData.userId;
-        if (userId && userId !== 'guest') {
-          await db.collection('users').doc(userId).update({
-            isBanned: true,
-            banReason: "Payment Tampering / Fraud Attempt",
-            bannedAt: admin.firestore.FieldValue.serverTimestamp()
-          });
-          console.log(`🔨 BANNED User ${userId} for tampering with payments.`);
-        }
-
-        // 3. Stop processing
-        return res.status(200).send("Fraud Detected - User Banned");
-      }
-
-      // 3. ✅ SUCCESS
-      await orderRef.update({
-        status: 'placed',
-        'payment.status': 'paid',
-        providerStatus: 'pending'
-      });
-
-      await generateAndSendConsolidatedInvoice([doc.data()]);
-
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  res.json({ received: true });
-});
-
-// ------------------------------------------------------------------
-// 💰 2. RAZORPAY WEBHOOK (Updated for Split Orders)
-// ------------------------------------------------------------------
 exports.razorpayWebhook = functions
   .runWith({ timeoutSeconds: 300, memory: '1GB' })
   .https.onRequest(async (req, res) => {
-    const signature = req.headers["x-razorpay-signature"];
+    const signature = req.headers['x-razorpay-signature'];
+    const eventId = req.headers['x-razorpay-event-id'];
     const secret = functions.config().razorpay?.webhook_secret;
 
-    // 1. Verify Signature
-    if (!Razorpay.validateWebhookSignature(JSON.stringify(req.body), signature, secret)) {
-      return res.status(400).send("Invalid Signature");
+    // 1. Validate Signature
+    const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(req.rawBody.toString())
+        .digest('hex');
+
+    if (expectedSignature !== signature) {
+        console.error(`❌ Razorpay Signature Error: Mismatch`);
+        return res.status(400).send("Invalid signature");
     }
 
-    const payload = req.body.payload.payment.entity;
-    const notes = payload.notes || {};
-
-    // 🔍 KEY FIX: Look for groupId (Split Orders) OR orderId (Legacy/Single)
-    const groupId = notes.groupId;
-    const specificOrderId = notes.orderId;
-
-    const amountPaid = payload.amount / 100; // Razorpay is in paise
+    // 2. Idempotency
+    if (!eventId) return res.status(400).send("Missing event ID");
+    const eventRef = db.collection('webhookEvents').doc(eventId);
+    const doc = await eventRef.get();
+    if (doc.exists) return res.status(200).send("OK");
 
     try {
-      let ordersToUpdate = [];
+        const body = JSON.parse(req.rawBody.toString());
 
-      // SCENARIO A: Split Order (The new standard)
-      if (groupId) {
-        const q = db.collection('orders').where('groupId', '==', groupId);
-        const snapshot = await q.get();
+        if (body.event === 'payment.captured' || body.event === 'order.paid') {
+            const payload = body.payload.payment.entity;
+            const groupId = payload.notes?.groupId;
+            const amountPaid = payload.amount / 100; // Razorpay is in paise
 
-        if (snapshot.empty) {
-          console.error(`❌ Webhook: No orders found for Group ID ${groupId}`);
-          return res.status(404).send("Orders not found");
+            if (!groupId) return res.status(400).send("Missing groupId");
+
+            // 3. Fetch Group Orders
+            const snapshot = await db.collection("orders").where("groupId", "==", groupId).get();
+            if (snapshot.empty) return res.status(404).send("Orders not found");
+
+            const ordersToUpdate = snapshot.docs;
+            const allOrderData = ordersToUpdate.map(d => d.data());
+
+            // 4. 🛡️ FRAUD CHECK
+            // In your frontend, every split order saves the 'totalPayAmount' in payment.total
+            const expectedAmount = allOrderData[0].payment.total; 
+            const userId = allOrderData[0].userId;
+
+            if (Math.abs(amountPaid - expectedAmount) > 5) { // 5 Rupee buffer
+                const fraudMsg = `FRAUD: Group ${groupId} paid ${amountPaid} but expected ${expectedAmount}`;
+                console.error(`🚨 ${fraudMsg}`);
+
+                const fraudBatch = db.batch();
+                ordersToUpdate.forEach(docSnap => {
+                    fraudBatch.update(docSnap.ref, {
+                        status: 'fraud_alert',
+                        fraudReason: fraudMsg,
+                        'payment.status': 'fraud_flagged'
+                    });
+                });
+                
+                // Ban the user
+                if (userId && userId !== 'guest') {
+                    fraudBatch.update(db.collection('users').doc(userId), {
+                        isBanned: true,
+                        banReason: "Payment Tampering / Fraud Attempt",
+                        bannedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+                await fraudBatch.commit();
+                return res.status(200).send("Fraud Detected");
+            }
+
+            // 5. ✅ SUCCESS: Batch Update
+            const batch = db.batch();
+            ordersToUpdate.forEach((docSnap) => {
+                // Only update if not already processed
+                if (docSnap.data().status !== 'placed') {
+                    batch.update(docSnap.ref, {
+                        status: 'placed',
+                        'payment.status': 'paid',
+                        'payment.transactionId': payload.id,
+                        providerStatus: 'pending', // 🟢 Wakes up your processNewOrder bot!
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+            });
+            await batch.commit();
+            console.log(`✅ Razorpay Group Order ${groupId} successfully paid.`);
+
+            // 6. 🧾 GENERATE INVOICE
+            await generateAndSendConsolidatedInvoice(allOrderData);
         }
-        ordersToUpdate = snapshot.docs;
-      }
-      // SCENARIO B: Single Order (Legacy fallback)
-      else if (specificOrderId) {
-        const doc = await db.collection('orders').doc(specificOrderId).get();
-        if (!doc.exists) return res.status(404).send("Order not found");
-        ordersToUpdate = [doc];
-      }
-      else {
-        console.error("❌ Webhook: Missing groupId or orderId in notes");
-        return res.status(400).send("Invalid logic");
-      }
 
-      // 2. 🛡️ FRAUD CHECK (Check the first order as reference)
-      const firstOrderData = ordersToUpdate[0].data();
-      const expectedAmount = firstOrderData.payment.total; // Every split doc has the grand total
-
-      if (Math.abs(amountPaid - expectedAmount) > 5) { // 5 Rupee buffer for rounding
-        const fraudMsg = `FRAUD: Group ${groupId || specificOrderId} paid ${amountPaid} but expected ${expectedAmount}`;
-        console.error(`🚨 ${fraudMsg}`);
-
-        // Flag all orders as fraud
-        const batch = db.batch();
-        ordersToUpdate.forEach(doc => {
-          batch.update(doc.ref, {
-            status: 'fraud_alert',
-            fraudReason: fraudMsg,
-            'payment.status': 'fraud_flagged'
-          });
-        });
-        await batch.commit();
-
-        return res.status(200).send("Fraud Detected");
-      }
-
-      // 3. ✅ SUCCESS: Batch Update All Orders
-      const batch = db.batch();
-
-      ordersToUpdate.forEach(doc => {
-        // Only update if not already paid (idempotency)
-        if (doc.data().status !== 'placed') {
-          batch.update(doc.ref, {
-            status: 'placed',
-            'payment.status': 'paid',
-            'payment.transactionId': payload.id,
-            providerStatus: 'pending', // 🟢 Wakes up the fulfillment bot
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          });
-        }
-      });
-
-      await batch.commit();
-      console.log(`✅ Webhook: Updated ${ordersToUpdate.length} orders for Group ${groupId || specificOrderId}`);
-
-      // 4. Send Invoice (Consolidated)
-      // We pass the raw data of all docs to generate one big invoice
-      const allOrderData = ordersToUpdate.map(d => d.data());
-      await generateAndSendConsolidatedInvoice(allOrderData);
-
-      res.status(200).send("OK");
+        // Lock Event
+        await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp(), event: body.event });
+        res.status(200).send("OK");
 
     } catch (error) {
-      console.error("Webhook Error:", error);
-      res.status(500).send("Internal Server Error");
+        console.error("Razorpay Processing Error:", error);
+        res.status(500).send("Internal Server Error");
     }
-  });
+});
+
+// ------------------------------------------------------------------
+// 💰 2. STRIPE WEBHOOK (Group Orders, Fraud Check, Invoice)
+// ------------------------------------------------------------------
+exports.stripeWebhook = functions
+  .runWith({ timeoutSeconds: 300, memory: '1GB' })
+  .https.onRequest(async (req, res) => {
+    const signature = req.headers['stripe-signature'];
+    const secret = functions.config().stripe?.webhook_secret;
+
+    let event;
+
+    // 1. Validate Signature
+    try {
+        event = stripe.webhooks.constructEvent(req.rawBody, signature, secret);
+    } catch (err) {
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // 2. Idempotency
+    const eventId = event.id;
+    const eventRef = db.collection('webhookEvents').doc(eventId);
+    const doc = await eventRef.get();
+    if (doc.exists) return res.status(200).json({ received: true });
+
+    try {
+        if (event.type === 'payment_intent.succeeded') {
+            const paymentIntent = event.data.object;
+            const groupId = paymentIntent.metadata?.groupId;
+            const amountPaid = paymentIntent.amount_received / 100; // Stripe is in cents
+
+            if (!groupId) return res.status(400).send("Missing groupId");
+
+            // 3. Fetch Group Orders
+            const snapshot = await db.collection("orders").where("groupId", "==", groupId).get();
+            if (snapshot.empty) return res.status(404).send("Orders not found");
+
+            const ordersToUpdate = snapshot.docs;
+            const allOrderData = ordersToUpdate.map(d => d.data());
+
+            // 4. 🛡️ FRAUD CHECK
+            const expectedAmount = allOrderData[0].payment.total;
+            const userId = allOrderData[0].userId;
+
+            if (Math.abs(amountPaid - expectedAmount) > 2) { // 2 unit buffer for currency conversion rounding
+                const fraudMsg = `FRAUD: Group ${groupId} paid ${amountPaid} but expected ${expectedAmount}`;
+                console.error(`🚨 ${fraudMsg}`);
+
+                const fraudBatch = db.batch();
+                ordersToUpdate.forEach(docSnap => {
+                    fraudBatch.update(docSnap.ref, {
+                        status: 'fraud_alert',
+                        fraudReason: fraudMsg,
+                        'payment.status': 'fraud_flagged'
+                    });
+                });
+
+                if (userId && userId !== 'guest') {
+                    fraudBatch.update(db.collection('users').doc(userId), {
+                        isBanned: true,
+                        banReason: "Payment Tampering / Fraud Attempt",
+                        bannedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+                await fraudBatch.commit();
+                return res.status(200).send("Fraud Detected");
+            }
+
+            // 5. ✅ SUCCESS: Batch Update
+            const batch = db.batch();
+            ordersToUpdate.forEach((docSnap) => {
+                if (docSnap.data().status !== 'placed') {
+                    batch.update(docSnap.ref, {
+                        status: 'placed',
+                        'payment.status': 'paid',
+                        'payment.transactionId': paymentIntent.id,
+                        providerStatus: 'pending', // 🟢 Wakes up your processNewOrder bot!
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+            });
+            await batch.commit();
+            console.log(`✅ Stripe Group Order ${groupId} successfully paid.`);
+
+            // 6. 🧾 GENERATE INVOICE
+            await generateAndSendConsolidatedInvoice(allOrderData);
+        }
+
+        // Lock Event
+        await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp(), type: event.type });
+        res.status(200).json({ received: true });
+
+    } catch (error) {
+        console.error("Stripe Processing Error:", error);
+        res.status(500).send("Internal Server Error");
+    }
+});
 
 exports.sendConsolidatedInvoice = functions
   .runWith({ memory: '1GB', timeoutSeconds: 120 })

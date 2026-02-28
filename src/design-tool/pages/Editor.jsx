@@ -173,6 +173,13 @@ export default function EditorPanel() {
     const [isAddingToCart, setIsAddingToCart] = useState(false);
     const isSidebarOpen = !!activePanel && activePanel !== 'product';
 
+    useEffect(() => {
+        if (!urlTemplateId && !urlProductId && !editingDesignId) {
+            // It's a brand new design, generate ID right now!
+            setEditingDesignId(uuidv4());
+        }
+    }, []);
+
     const currencyInfo = CURRENCY_MAP[urlRegion] || CURRENCY_MAP.IN;
     let currentPrice = 0;
     if (productData) {
@@ -364,6 +371,7 @@ export default function EditorPanel() {
             console.error("Error merging design:", error);
         }
     };
+    console.log(fabricCanvas?.getActiveObject())
 
     // 👇 2. EDIT LOGIC (Strictly for "Edit/Replace Design")
     const handleLoadSavedDesign = async (designItem) => {
@@ -458,7 +466,7 @@ export default function EditorPanel() {
                     setCurrentDesign(null);
 
                     // Optional: clean URL
-                    // setSearchParams({});
+                    setSearchParams({});
                 } else {
                     console.error("Template not found");
                 }
@@ -996,6 +1004,7 @@ export default function EditorPanel() {
                         urlSize={urlSize || currentDesign?.productConfig?.variantSize}
                         dpiIssues={dpiIssuesList}
                         isAdmin={isAdmin}
+                        storageFolder={`users/${user.uid}/designs/${editingDesignId}/images`}
                     />
 
                     {/* Conditional Check */}
@@ -1039,6 +1048,7 @@ export default function EditorPanel() {
                                             canvas={store.getState().canvas}
                                             userId={userId}
                                             editingDesignId={editingDesignId}
+                                            urlDesignId={urlDesignId}
                                             currentView={currentView}
                                             viewStates={viewStates}
                                             productData={{
@@ -1052,6 +1062,7 @@ export default function EditorPanel() {
                                             currentDesignName={currentDesign?.name}
                                             className="h-9 px-4 rounded-full flex items-center justify-center hover:text-orange-400 text-slate-200 text-xs font-bold shadow-lg transition-all"
                                             variant="ghost"
+                                            fabricCanvas={fabricCanvas}
                                         />
                                         <button
                                             onClick={handlePaste}
@@ -1229,7 +1240,9 @@ export default function EditorPanel() {
                                 size: urlSize || currentDesign?.productConfig?.variantSize,
                                 print_areas: productData.print_areas
                             }}
+                            fabricCanvas={fabricCanvas}
                             currentObjects={canvasObjects}
+                            urlDesignId={urlDesignId}
                             onGetSnapshot={getCleanDataURL}
                             currentDesignName={currentDesign?.name}
                             variant="ghost"
@@ -1242,6 +1255,7 @@ export default function EditorPanel() {
                     isGeneratingPreview={isGeneratingPreview}
                     updateObject={updateObject}
                     currentDesignName={currentDesign?.name || "Untitled Design"}
+                    storageFolder={`users/${user.uid}/designs/${editingDesignId}/images`}
 
                     // --- 3. Pass View Switcher Props ---
                     currentView={currentView}

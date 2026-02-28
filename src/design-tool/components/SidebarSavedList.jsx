@@ -9,6 +9,7 @@ import {
   MoreVertical, Edit, Merge, Trash2, MoreHorizontal,
   AlertCircle, FileJson, Image as ImageIcon 
 } from 'lucide-react';
+import { deleteDesign } from '../utils/deleteDesign';
 
 export default function SidebarSavedList({ 
   userId,
@@ -40,16 +41,6 @@ export default function SidebarSavedList({
     };
   }, []);
 
-  const handleDeleteDesign = async (designId) => {
-    if (!userId || !designId) return;
-    try {
-      await deleteDoc(doc(db, `users/${userId}/designs`, designId));
-    } catch (err) {
-      console.error("Error deleting design:", err);
-      alert("Failed to delete design.");
-    }
-  };
-
   const handleAction = async (action, design, e) => {
     e.stopPropagation(); 
     setOpenMenuId(null); 
@@ -65,7 +56,8 @@ export default function SidebarSavedList({
     }
     else if (action === 'delete') {
       if (window.confirm(`Delete "${design.name}"? This cannot be undone.`)) {
-        await handleDeleteDesign(design.id);
+        await deleteDesign(design.id, userId);
+        alert("Design deleted successfully.");
       }
     }
   };

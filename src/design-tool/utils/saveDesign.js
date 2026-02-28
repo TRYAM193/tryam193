@@ -1,7 +1,92 @@
 import { db as firestore, storage } from '@/firebase'; // Adjust path if needed
 import { doc, setDoc, collection, addDoc } from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
-import { getDownloadURL, uploadBytes, ref } from "firebase/storage"
+import { getDownloadURL, uploadBytes, uploadString, ref, listAll, deleteObject } from "firebase/storage";
+
+// 🧬 HELPER: Clones images from browser cache to the new design folder
+const cloneCanvasImagesForCopy = async (userId, newDesignId, viewStates) => {
+  const clonedViewStates = JSON.parse(JSON.stringify(viewStates));
+
+  const processObjects = async (objects) => {
+    if (!objects) return;
+    for (let obj of objects) {
+      if ((obj.type === 'image' || obj.type === 'Image') && obj.src && obj.src.includes('firebasestorage')) {
+        try {
+          // 1. Fetch the existing image (Instant via browser cache)
+          const response = await fetch(obj.src);
+          const blob = await response.blob();
+
+          // 2. Upload to the new design's folder
+          const fileId = uuidv4();
+          const newRef = ref(storage, `users/${userId}/designs/${newDesignId}/images/originals/${fileId}`);
+          await uploadBytes(newRef, blob);
+          obj.src = await getDownloadURL(newRef);
+
+          // 3. Clone print_src (High-res version) if it exists
+          if (obj.print_src && obj.print_src.includes('firebasestorage')) {
+            const pRes = await fetch(obj.print_src);
+            const pBlob = await pRes.blob();
+            const pRef = ref(storage, `users/${userId}/designs/${newDesignId}/images/proxies/${fileId}`);
+            await uploadBytes(pRef, pBlob);
+            obj.print_src = await getDownloadURL(pRef);
+          }
+        } catch (err) {
+          console.error("Failed to clone image:", err);
+        }
+      }
+      if (obj.type === 'group' && obj.objects) await processObjects(obj.objects);
+    }
+  };
+
+  for (const view of Object.keys(clonedViewStates)) {
+    await processObjects(clonedViewStates[view]);
+  }
+  return clonedViewStates; // Returns JSON with brand new URLs
+};
+
+const cleanUpRemovedImages = async (userId, designId, viewStates) => {
+  try {
+    // 1. Get all image URLs currently used on the canvas
+    const usedUrls = new Set();
+    Object.values(viewStates).forEach(objects => {
+      const traverse = (objs) => {
+        if (!objs) return;
+        objs.forEach(obj => {
+          if ((obj.type === 'image' || obj.type === 'Image') && obj.src) {
+            if (obj.src.includes('firebasestorage')) usedUrls.add(obj.src.split('?')[0]);
+            if (obj.print_src && obj.print_src.includes('firebasestorage')) usedUrls.add(obj.print_src.split('?')[0]);
+          }
+          if (obj.type === 'group' && obj.objects) traverse(obj.objects);
+        });
+      };
+      traverse(objects);
+    });
+
+    const usedUrlsArray = Array.from(usedUrls);
+
+    // 2. Check both 'originals' and 'proxies' folders
+    const foldersToCheck = ['originals', 'proxies'];
+
+    for (const subFolder of foldersToCheck) {
+      const folderRef = ref(storage, `users/${userId}/designs/${designId}/images/${subFolder}`);
+      const fileList = await listAll(folderRef);
+
+      // 3. Delete files that are no longer on the canvas
+      const deletePromises = fileList.items.map(async (itemRef) => {
+        const itemUrl = await getDownloadURL(itemRef);
+        const cleanItemUrl = itemUrl.split('?')[0];
+
+        if (!usedUrlsArray.includes(cleanItemUrl)) {
+          console.log(`🗑️ Auto-deleting removed image: ${itemRef.name}`);
+          return deleteObject(itemRef);
+        }
+      });
+      await Promise.all(deletePromises);
+    }
+  } catch (error) {
+    if (error.code !== 'storage/object-not-found') console.error("Cleanup Error:", error);
+  }
+};
 
 // Upload the images to Storage
 export const uploadToStorage = async (imgURL, fileLocation) => {
@@ -85,7 +170,7 @@ const dataURLtoBlob = (dataURL) => {
 
 
 // --- HELPER: Build Data Object ---
-const buildDesignDoc = (id, currentObjects, viewStates, productData, currentView, isNew, thumbnailDataUrl, name) => {
+const buildDesignDoc = (id, currentObjects, viewStates, productData, userId, currentView, isNew, thumbnailDataUrl, name) => {
   const now = Date.now();
 
   // Clean objects
@@ -134,15 +219,49 @@ const buildDesignDoc = (id, currentObjects, viewStates, productData, currentView
   return designDoc;
 };
 
+// 📸 HELPER: Upload Base64 Thumbnail to Storage
+const uploadThumbnail = async (userId, designId, base64String) => {
+  // 1. Safety check
+  if (!base64String || !base64String.startsWith('data:image')) return null;
+
+  try {
+    // 2. Create the exact path in the user's design folder
+    const imageRef = ref(storage, `users/${userId}/designs/${designId}/thumbnail.png`);
+
+    // 3. Upload the base64 string directly
+    await uploadString(imageRef, base64String, 'data_url');
+
+    // 4. Return the lightweight, permanent URL
+    const downloadURL = await getDownloadURL(imageRef);
+    return downloadURL;
+
+  } catch (error) {
+    console.error("Failed to upload thumbnail:", error);
+    return null; // Fallback to null so the design still saves even if image fails
+  }
+};
+
 // --- SAVE NEW DESIGN ---
-export const saveNewDesign = async (userId, currentObjects, viewStates, productData, currentView, setSaving, thumbnailDataUrl, name) => {
+// 👇 Add `isCopy = false` to the end of the parameters
+export const saveNewDesign = async (userId, currentObjects, viewStates, productData, currentView, setSaving, thumbnailDataUrl, name, isCopy = false) => {
   setSaving(true);
   try {
-    const newId = uuidv4(); // Generate new ID
+    const newId = uuidv4();
+    let finalViewStates = { ...viewStates, [currentView]: currentObjects };
+    // 🛑 THE CLONE FIX: If "Save As Copy", physical duplicate the files to the new ID!
+    if (isCopy) {
+      finalViewStates = await cloneCanvasImagesForCopy(userId, newId, finalViewStates);
+      currentObjects = finalViewStates[currentView]; // Update current objects for the build doc
+    }
 
-    const designDoc = buildDesignDoc(newId, currentObjects, viewStates, productData, currentView, true, thumbnailDataUrl, name);
-    designDoc.userId = userId; // Explicitly set User ID
+    // 1. Upload the thumbnail to Storage first
+    const thumbnailUrl = await uploadThumbnail(userId, newId, thumbnailDataUrl);
 
+    // 2. Build the doc using finalViewStates
+    const designDoc = buildDesignDoc(newId, currentObjects, finalViewStates, productData, userId, currentView, true, thumbnailUrl, name);
+    designDoc.userId = userId;
+    console.log(designDoc);
+    // 3. Save to Firestore
     const designRef = doc(firestore, `users/${userId}/designs`, newId);
     await setDoc(designRef, designDoc);
 
@@ -154,15 +273,18 @@ export const saveNewDesign = async (userId, currentObjects, viewStates, productD
     setSaving(false);
   }
 };
-
 // --- OVERWRITE EXISTING DESIGN ---
 export const overwriteDesign = async (userId, designId, currentObjects, viewStates, productData, currentView, setSaving, thumbnailDataUrl, name) => {
   if (!designId) return { success: false, error: "No Design ID provided" };
   setSaving(true);
 
   try {
+    const thumbnailUrl = await uploadThumbnail(userId, designId, thumbnailDataUrl);
     // ✅ Pass 'name' to the builder
-    const designDoc = buildDesignDoc(designId, currentObjects, viewStates, productData, currentView, false, thumbnailDataUrl, name);
+    const finalViewStates = { ...viewStates, [currentView]: currentObjects };
+    await cleanUpRemovedImages(userId, designId, finalViewStates);
+
+    const designDoc = buildDesignDoc(designId, currentObjects, viewStates, productData, userId, currentView, false, thumbnailUrl, name);
 
     const designRef = doc(firestore, `users/${userId}/designs`, designId);
     await setDoc(designRef, designDoc, { merge: true });
@@ -306,7 +428,7 @@ export const saveGlobalTemplate = async (canvas, name, category = "General", obj
             src: proxyURL,
             print_src: highResURL,
             originalWidth: originalWidth,
-            originalHeight: originalWidth, 
+            originalHeight: originalWidth,
             width: proxyData.width,
             height: proxyData.height,
             scaleX: obj.props.scaleX * widthRatio,
@@ -315,8 +437,8 @@ export const saveGlobalTemplate = async (canvas, name, category = "General", obj
         };
       })
     );
-    
-    
+
+
     const templateData = {
       id: templateId,
       name: name || "Untitled Template",

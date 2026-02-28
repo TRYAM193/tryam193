@@ -13,7 +13,7 @@ import addSvgToRedux from '../objectAdders/Svg';
 
 export default function MainToolbar({
     activePanel, onSelectTool, setSelectedId, setActiveTool,
-    isAdmin, brandDisplay, fabricCanvas, productId,
+    isAdmin, brandDisplay, fabricCanvas, productId, storageFolder,
     urlColor, urlSize, dpiIssues = []
 }) {
 
@@ -161,7 +161,7 @@ export default function MainToolbar({
             </button>
             <hr className="toolbar-divider" />
             <ToolButton icon={FiType} label="Text" isActive={activePanel === 'text'} onClick={() => onSelectTool('text')} tool='text' />
-            <ImageHandler setSelectedId={setSelectedId} setActiveTool={onSelectTool} className={`tool-button-wrapper ${activePanel === 'image' ? 'active' : ''}`} fabricCanvas={fabricCanvas}>
+            <ImageHandler setSelectedId={setSelectedId} storageFolder={storageFolder} setActiveTool={onSelectTool} className={`tool-button-wrapper ${activePanel === 'image' ? 'active' : ''}`} fabricCanvas={fabricCanvas}>
                 <ImagePlusIcon size={24} /> <span>Image</span>
             </ImageHandler>
             {isAdmin && (  // Check if current user is you/admin

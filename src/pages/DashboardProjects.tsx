@@ -8,6 +8,7 @@ import { useUserDesigns } from "@/hooks/use-user-designs";
 import { useAuth } from "@/hooks/use-auth";
 import { doc, deleteDoc } from "firebase/firestore";
 import { db } from "@/firebase";
+import { deleteDesign } from '@/design-tool/utils/deleteDesign';
 
 export default function DashboardProjects() {
   const { user } = useAuth();
@@ -37,7 +38,8 @@ export default function DashboardProjects() {
     
     if (window.confirm(`Are you sure you want to delete "${designName}"? This cannot be undone.`)) {
       try {
-        await deleteDoc(doc(db, `users/${user.uid}/designs`, designId));
+        await deleteDesign(designId, user.uid);
+        alert("Project deleted successfully.");
       } catch (err) {
         console.error("Error deleting design:", err);
         alert("Failed to delete project.");

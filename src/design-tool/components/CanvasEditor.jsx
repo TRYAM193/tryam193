@@ -482,6 +482,8 @@ export default function CanvasEditor({
 
       let obj = e.target;
       if (!obj) return;
+      setSelectedId(obj.customId);
+      setActiveTool(obj.textEffect === 'circle' ? 'circle-text' : obj.type);
 
       const type = obj.type ? obj.type.toLowerCase() : '';
 
@@ -590,13 +592,16 @@ export default function CanvasEditor({
     const fabricCanvas = fabricCanvasRef.current;
     if (!fabricCanvas) return;
 
+    // 🛑 FIX 1: Always discard active object to prevent render crashes during sync
     let selectedIds = [];
     const activeObject = fabricCanvas.getActiveObject();
-    if (activeObject && activeObject.type === 'activeselection') {
-      selectedIds = activeObject.getObjects().map(o => o.customId);
-      fabricCanvas.discardActiveObject();
-    } else if (activeObject) {
-      selectedIds = [activeObject.customId];
+    if (activeObject) {
+      if (activeObject.type === 'activeselection') {
+        selectedIds = activeObject.getObjects().map(o => o.customId);
+        fabricCanvas.discardActiveObject(); // Force discard to protect the stack
+      } else {
+        selectedIds = [activeObject.customId];
+      }
     }
 
     isSyncingRef.current = true;
@@ -648,7 +653,7 @@ export default function CanvasEditor({
           }
         }
 
-        if (objData.type === 'image') {
+        if (objData.type.toLowerCase() === 'image') {
           // 🛡️ CRITICAL FIX: Prevent Double Loading
           const isPending = pendingImagesRef.current.has(objData.id);
           const alreadyOnCanvas = fabricCanvas.getObjects().some(obj => obj.customId === objData.id);
@@ -731,14 +736,14 @@ export default function CanvasEditor({
         if (!reduxIds.has(obj.customId)) {
           fabricCanvas.remove(obj);
           previousStatesRef.current.delete(obj.customId);
+          fabricCanvas.requestRenderAll();
         }
       });
 
-      // Restore Z-Index
-      canvasObjects.forEach((objData, index) => {
+      canvasObjects.forEach((objData) => {
         const fabricObj = fabricCanvas.getObjects().find(o => o.customId === objData.id);
         if (fabricObj) {
-          fabricCanvas.moveObjectTo(fabricObj, index);
+          fabricCanvas.bringObjectToFront(fabricObj);
         }
       });
 
@@ -777,6 +782,7 @@ export default function CanvasEditor({
       handleCopy,
       handlePaste
     );
+    if (action === 'delete') fabricCanvasRef.current?.discardActiveObject();
   };
 
   return (
@@ -787,24 +793,26 @@ export default function CanvasEditor({
       style={{ touchAction: 'none' }} // ✅ ADDED THIS LINE
     >
       {/* ✅ CANVAS BACKGROUND COLOR PICKER */}
-      <div
-        className="relative w-8 h-8 rounded-full left-25 overflow-hidden shadow-md cursor-pointer border border-white/20 hover:scale-110 transition-transform"
-        style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }}
-        title="Change Canvas Background"
-      >
-        <input
-          type="color"
-          defaultValue="#ffffff"
-          className="absolute -top-2 -left-4 w-12 h-12 opacity-0 cursor-pointer"
-          onChange={(e) => {
-            // Check if fabricCanvas is available in this file
-            if (fabricCanvas) {
-              fabricCanvas.backgroundColor = e.target.value;
-              fabricCanvas.requestRenderAll();
-            }
-          }}
-        />
-      </div>
+      {!productId &&
+        <div
+          className="relative w-8 h-8 rounded-full left-25 overflow-hidden shadow-md cursor-pointer border border-white/20 hover:scale-110 transition-transform"
+          style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }}
+          title="Change Canvas Background"
+        >
+          <input
+            type="color"
+            defaultValue="#ffffff"
+            className="absolute -top-2 -left-4 w-12 h-12 opacity-0 cursor-pointer"
+            onChange={(e) => {
+              // Check if fabricCanvas is available in this file
+              if (fabricCanvas) {
+                fabricCanvas.backgroundColor = e.target.value;
+                fabricCanvas.requestRenderAll();
+              }
+            }}
+          />
+        </div>
+      }
       <canvas ref={canvasRef} id="canvas" />
 
       {menuPosition && selectedObjectUUIDs.length > 0 && (

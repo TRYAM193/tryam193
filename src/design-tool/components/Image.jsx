@@ -4,11 +4,11 @@ import { v4 as uuidv4 } from 'uuid';
 import ImageAdder from '../objectAdders/Image';
 import { uploadToStorage } from '../utils/saveDesign';
 
-export default function ImageHandler({ 
-  setSelectedId, 
-  setActiveTool, 
-  children, 
-  className, 
+export default function ImageHandler({
+  setSelectedId,
+  setActiveTool,
+  children,
+  className,
   fabricCanvas,
   storageFolder = "user_drafts" // 👈 Default is the 30-day temp folder!
 }) {
@@ -46,8 +46,8 @@ export default function ImageHandler({
       // --- STEP B: GENERATE LOCAL PROXY (Using Longest Edge) ---
       const maxDimension = 500;
       const largestSide = Math.max(tempImg.width, tempImg.height);
-      const scale = largestSide > maxDimension ? maxDimension / largestSide : 1; 
-      
+      const scale = largestSide > maxDimension ? maxDimension / largestSide : 1;
+
       const targetWidth = tempImg.width * scale;
       const targetHeight = tempImg.height * scale;
 
@@ -60,18 +60,16 @@ export default function ImageHandler({
       // Convert the small proxy canvas to a local blob
       proxyCanvas.toBlob(async (proxyBlob) => {
         const proxyLocalUrl = URL.createObjectURL(proxyBlob);
-        const customId = Date.now();
 
         // --- STEP C: PUT *PROXY* ON CANVAS ---
         await ImageAdder(proxyLocalUrl, setSelectedId, setActiveTool, fabricCanvas);
-        
+
         const fabricObj = fabricCanvas.getActiveObject();
         if (fabricObj) {
-          fabricObj.set({ 
-            customId: customId,
+          fabricObj.set({
             originalWidth: tempImg.width,   // Save massive width for DPI/Backend
             originalHeight: tempImg.height, // Save massive height for DPI/Backend
-            isUploading: true 
+            isUploading: true
           });
         }
 
@@ -83,18 +81,18 @@ export default function ImageHandler({
           if (largestSide <= 500) {
             // Upload straight to dynamic folder
             highResUrl = await uploadToStorage(file, `${storageFolder}/originals/${fileId}`);
-            proxyUrl = highResUrl; 
+            proxyUrl = highResUrl;
           } else {
-            // Dual Upload to dynamic folder
+            // Dual Upload to dynamic folder storageFolder={`users/${user.uid}/designs/${editingDesignId}/images`} 
             [highResUrl, proxyUrl] = await Promise.all([
               uploadToStorage(file, `${storageFolder}/originals/${fileId}`),
               uploadToStorage(proxyBlob, `${storageFolder}/proxies/${fileId}`)
             ]);
           }
-
+          
           if (fabricObj) {
-            fabricObj.set({
-              src: proxyUrl,          // Face of the image (cart/session)
+            fabricObj.set({      
+              proxy_src: proxyUrl,  
               print_src: highResUrl,  // Soul of the image (backend renderer)
               isUploading: false
             });

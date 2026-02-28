@@ -45,7 +45,7 @@ export function DashboardSidebar() {
   const navigate = useNavigate();
 
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [userProfile, setUserProfile] = useState<{ name?: string; photoUrl?: string } | null>(null);
+  const [userProfile, setUserProfile] = useState<{ name?: string; photoURL?: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loadingClaim, setLoadingClaim] = useState(true);
 
@@ -59,7 +59,7 @@ export function DashboardSidebar() {
     }
     const unsub = onSnapshot(doc(db, "users", user.uid), (snapshot) => {
       if (snapshot.exists()) {
-        setUserProfile(snapshot.data() as { name?: string; photoUrl?: string });
+        setUserProfile(snapshot.data() as { name?: string; photoURL?: string });
       }
     });
     return () => unsub();
@@ -111,7 +111,7 @@ export function DashboardSidebar() {
     <div className="bg-[#0f172a] text-slate-200 border border-white/10 rounded-md w-56">
       <div className="flex items-center gap-2 p-3 border-b border-white/10">
         <Avatar className="h-8 w-8 border border-orange-500/30">
-          <AvatarImage src={userProfile?.photoUrl} />
+          <AvatarImage src={userProfile?.photoURL} />
           <AvatarFallback className="bg-slate-800 text-orange-400 text-xs">{initials}</AvatarFallback>
         </Avatar>
         <div className="flex flex-col overflow-hidden">
@@ -265,7 +265,7 @@ export function DashboardSidebar() {
                 <button className={`flex items-center rounded-2xl hover:bg-white/5 transition-colors group ${isCollapsed ? "justify-center p-0 h-10 w-10" : "gap-3 w-full p-2 text-left"
                   }`}>
                   <Avatar className="h-9 w-9 border border-white/10 group-hover:border-orange-500/50 transition-colors">
-                    <AvatarImage src={userProfile?.photoUrl} />
+                    <AvatarImage src={userProfile?.photoURL} />
                     <AvatarFallback className="bg-slate-800 text-slate-200 text-xs">{initials}</AvatarFallback>
                   </Avatar>
 
@@ -350,7 +350,7 @@ export function DashboardSidebar() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 ml-1 border border-white/10">
                 <Avatar className="h-full w-full">
-                  <AvatarImage src={userProfile?.photoUrl} />
+                  <AvatarImage src={userProfile?.photoURL} />
                   <AvatarFallback className="bg-slate-800 text-slate-200 text-[10px]">{initials}</AvatarFallback>
                 </Avatar>
               </Button>

@@ -477,7 +477,8 @@ export default function OrderCheckoutPage() {
         const createStripe = httpsCallable(functions, 'createStripeIntent');
         const { data }: any = await createStripe({
           amount: totalPayAmount,
-          currency: stripeCurrencyMap[shippingInfo.countryCode] || 'usd'
+          currency: stripeCurrencyMap[shippingInfo.countryCode] || 'usd',
+          groupId: checkoutGroupId
         });
 
         setStripePromise(loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY));

@@ -438,7 +438,6 @@ export const saveGlobalTemplate = async (canvas, name, category = "General", obj
       })
     );
 
-
     const templateData = {
       id: templateId,
       name: name || "Untitled Template",
@@ -446,7 +445,7 @@ export const saveGlobalTemplate = async (canvas, name, category = "General", obj
       createdAt: Date.now(),
       type: 'BLANK', // Always BLANK as requested
       thumbnailUrl: thumbnailURL,
-      canvasData: modifiedObjects,
+      canvasData: JSON.parse(JSON.stringify(modifiedObjects)),
       canvasBackground: canvas?.backgroundColor || 'white'
     };
 

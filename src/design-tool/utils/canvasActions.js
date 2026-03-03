@@ -1,133 +1,134 @@
-// src/utils/canvasActions.js
+// src/design-tool/utils/canvasActions.js
 import { v4 as uuidv4 } from 'uuid';
+import { dispatchDelta } from '../redux/canvasSlice';
 
 export const handleCanvasAction = (action, selectedIds, canvasObjects, dispatch, setCanvasObjects, setActiveTool, setSelectedId, handleCopy, handlePaste) => {
   if (!selectedIds || selectedIds.length === 0 || !canvasObjects) return;
 
-  // We operate on a copy of the array
-  let newObjects = [...canvasObjects];
+  // Helper to find original object
+  const getObj = (id) => canvasObjects.find(o => o.id === id);
 
   switch (action) {
     // --- DELETE (Multi) ---
     case 'delete':
-      // Filter OUT any object that is in the selectedIds list
-      newObjects = newObjects.filter(obj => !selectedIds.includes(obj.id));
+      selectedIds.forEach(id => {
+        const obj = getObj(id);
+        if (obj) {
+          dispatch(dispatchDelta({ type: 'REMOVE', targetId: id, before: obj, after: null }));
+        }
+      });
       setActiveTool(null);
       setSelectedId(null);
-      break;
+      return; // Exit early, Delta handles Redux
 
     // --- DUPLICATE (Multi) ---
     case 'duplicate':
-      // Find all objects to duplicate
-      const objectsToDuplicate = newObjects.filter(obj => selectedIds.includes(obj.id));
-      
-      const duplicates = objectsToDuplicate.map(obj => ({
-        ...obj,
-        id: uuidv4(), // New ID
-        props: {
-          ...obj.props,
-          left: (obj.props.left || 0) + 20, // Offset so they don't stack directly on top
-          top: (obj.props.top || 0) + 20
+      selectedIds.forEach(id => {
+        const obj = getObj(id);
+        if (obj) {
+          const newId = uuidv4();
+          const newObj = {
+            ...obj,
+            id: newId,
+            props: {
+              ...obj.props,
+              left: (obj.props.left || 0) + 20, 
+              top: (obj.props.top || 0) + 20
+            }
+          };
+          dispatch(dispatchDelta({ type: 'ADD', targetId: newId, before: null, after: newObj }));
         }
-      }));
-      
-      newObjects = [...newObjects, ...duplicates];
-      break;
+      });
+      return;
 
     // --- LOCK/UNLOCK (Multi) ---
     case 'toggleLock':
-      // Check if the *first* object is locked to decide target state (toggle)
-      const firstObj = newObjects.find(o => o.id === selectedIds[0]);
+      const firstObj = getObj(selectedIds[0]);
       if (!firstObj) return;
       
-      const targetLockState = !firstObj.props.lockMovementX; // Toggle based on first
+      const targetLockState = !firstObj.props.lockMovementX; 
 
-      newObjects = newObjects.map(obj => {
-        if (selectedIds.includes(obj.id)) {
-          return {
-            ...obj,
-            props: {
-              ...obj.props,
-              lockMovementX: targetLockState,
-              lockMovementY: targetLockState,
-              lockRotation: targetLockState,
-              lockScalingX: targetLockState,
-              lockScalingY: targetLockState,
-              hasControls: !targetLockState, // Hide controls if locked
+      selectedIds.forEach(id => {
+        const obj = getObj(id);
+        if (obj) {
+          dispatch(dispatchDelta({
+            type: 'UPDATE',
+            targetId: id,
+            before: { 
+              lockMovementX: obj.props.lockMovementX, lockMovementY: obj.props.lockMovementY, 
+              lockRotation: obj.props.lockRotation, lockScalingX: obj.props.lockScalingX, 
+              lockScalingY: obj.props.lockScalingY, hasControls: obj.props.hasControls 
+            },
+            after: { 
+              lockMovementX: targetLockState, lockMovementY: targetLockState, 
+              lockRotation: targetLockState, lockScalingX: targetLockState, 
+              lockScalingY: targetLockState, hasControls: !targetLockState 
             }
-          };
+          }));
         }
-        return obj;
       });
-      break;
+      return;
 
     // --- FLIP (Multi) ---
     case 'flipHorizontal':
     case 'flipVertical':
       const prop = action === 'flipHorizontal' ? 'flipX' : 'flipY';
-      newObjects = newObjects.map(obj => {
-        if (selectedIds.includes(obj.id)) {
-          return {
-            ...obj,
-            props: { ...obj.props, [prop]: !obj.props[prop] }
-          };
+      selectedIds.forEach(id => {
+        const obj = getObj(id);
+        if (obj) {
+          dispatch(dispatchDelta({
+            type: 'UPDATE',
+            targetId: id,
+            before: { [prop]: obj.props[prop] },
+            after: { [prop]: !obj.props[prop] }
+          }));
         }
-        return obj;
       });
-      break;
-
-    // --- LAYERING (Multi - Simplified) ---
-    // Handling Z-index for multi-selection is complex. 
-    // This logic moves ALL selected items to Front/Back as a block.
-    
-    case 'bringToFront':
-        // 1. Extract selected objects
-        const toFront = newObjects.filter(o => selectedIds.includes(o.id));
-        // 2. Remove them from original array
-        const remainingFront = newObjects.filter(o => !selectedIds.includes(o.id));
-        // 3. Push them to the end (top)
-        newObjects = [...remainingFront, ...toFront];
-        break;
-
-    case 'sendToBack':
-        // 1. Extract selected objects
-        const toBack = newObjects.filter(o => selectedIds.includes(o.id));
-        // 2. Remove them
-        const remainingBack = newObjects.filter(o => !selectedIds.includes(o.id));
-        // 3. Unshift them to the start (bottom)
-        newObjects = [...toBack, ...remainingBack];
-        break;
-        
-    case 'bringForward':
-       if(selectedIds.length === 1) {
-           const idx = newObjects.findIndex(o => o.id === selectedIds[0]);
-           if (idx < newObjects.length - 1) {
-               [newObjects[idx], newObjects[idx + 1]] = [newObjects[idx + 1], newObjects[idx]];
-           }
-       }
-       break;
-
-    case 'sendBackward':
-       if(selectedIds.length === 1) {
-           const idx = newObjects.findIndex(o => o.id === selectedIds[0]);
-           if (idx > 0) {
-               [newObjects[idx], newObjects[idx - 1]] = [newObjects[idx - 1], newObjects[idx]];
-           }
-       }
-       break;
+      return;
 
     case 'copy':
-      handleCopy()
-      break
+      handleCopy();
+      return;
 
     case 'paste':
-      handlePaste()
-      break
-
-    default:
+      handlePaste();
       return;
   }
 
-  // Dispatch update
-  dispatch(setCanvasObjects(newObjects));
+  // --- LAYERING (Multi - Uses REORDER Delta) ---
+  // Layering is the only action that requires tracking the entire array order
+  let newObjects = [...canvasObjects];
+
+  if (action === 'bringToFront') {
+      const toFront = newObjects.filter(o => selectedIds.includes(o.id));
+      const remainingFront = newObjects.filter(o => !selectedIds.includes(o.id));
+      newObjects = [...remainingFront, ...toFront];
+  } 
+  else if (action === 'sendToBack') {
+      const toBack = newObjects.filter(o => selectedIds.includes(o.id));
+      const remainingBack = newObjects.filter(o => !selectedIds.includes(o.id));
+      newObjects = [...toBack, ...remainingBack];
+  }
+  else if (action === 'bringForward' && selectedIds.length === 1) {
+      const idx = newObjects.findIndex(o => o.id === selectedIds[0]);
+      if (idx < newObjects.length - 1) {
+          [newObjects[idx], newObjects[idx + 1]] = [newObjects[idx + 1], newObjects[idx]];
+      }
+  }
+  else if (action === 'sendBackward' && selectedIds.length === 1) {
+      const idx = newObjects.findIndex(o => o.id === selectedIds[0]);
+      if (idx > 0) {
+          [newObjects[idx], newObjects[idx - 1]] = [newObjects[idx - 1], newObjects[idx]];
+      }
+  } else {
+      return; // If it didn't match anything, do nothing
+  }
+
+  // Dispatch the REORDER receipt
+  dispatch(dispatchDelta({ 
+      type: 'REORDER', 
+      targetId: 'ALL', 
+      before: canvasObjects, // The old array layout
+      after: newObjects      // The new array layout
+  }));
 };

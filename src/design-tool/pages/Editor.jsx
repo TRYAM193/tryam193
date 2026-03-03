@@ -31,6 +31,7 @@ import SaveTemplateButton from '../components/SaveTemplateButton';
 import { v4 as uuidv4 } from 'uuid';
 import { uploadToStorage } from '../utils/saveDesign'
 import { PriceDisplay } from '@/components/PriceDisplay';
+import { Canvas } from 'fabric';
 
 function removeUndefined(obj) {
     if (Array.isArray(obj)) {
@@ -118,6 +119,7 @@ export default function EditorPanel() {
     const canvasObjects = useSelector((state) => state.canvas.present);
     const past = useSelector((state) => state.canvas.past);
     const future = useSelector((state) => state.canvas.future);
+    const present = useSelector((state) => state.canvas.present);
     const clipboard = useSelector((state) => state.canvas.clipboard);
 
     const urlProductId = searchParams.get('product');
@@ -305,6 +307,9 @@ export default function EditorPanel() {
         return true;
     };
 
+    console.log(past)
+    console.log(future)
+
     const handlePaste = () => {
         if (!clipboard || clipboard.length === 0) return;
 
@@ -371,7 +376,6 @@ export default function EditorPanel() {
             console.error("Error merging design:", error);
         }
     };
-    console.log(fabricCanvas?.getActiveObject())
 
     // 👇 2. EDIT LOGIC (Strictly for "Edit/Replace Design")
     const handleLoadSavedDesign = async (designItem) => {

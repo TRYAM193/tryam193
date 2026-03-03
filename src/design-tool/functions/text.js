@@ -1,76 +1,51 @@
-// src/functions/text.js
+// src/design-tool/functions/text.js
 import { store } from '../redux/store';
-import { setCanvasObjects } from '../redux/canvasSlice';
+import { dispatchDelta } from '../redux/canvasSlice';
+import { v4 as uuidv4 } from 'uuid';
+
+// 🛑 THE FIX: Define EVERY property the sidebar can touch
+const BASE_TEXT_PROPS = {
+  angle: 0, opacity: 1, scaleX: 1, scaleY: 1,
+  fill: '#000000', stroke: '#000000', strokeWidth: 0,
+  shadowColor: '#000000', shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0,
+  fontWeight: 'normal', fontStyle: 'normal', underline: false, 
+  textAlign: 'left', charSpacing: 0, textEffect: 'none', 
+  radius: 150, arcAngle: 120, flagVelocity: 50
+};
 
 export default function Text(setSelectedId, setActiveTool) {
-  // Use a fresh reference to state inside the function call to ensure current data
-  const getCanvasObjects = () => store.getState().canvas.present;
-
+  
   function handleAddText(obj) {
-    const currentObjects = getCanvasObjects();
-    const newObjects = [...currentObjects, obj];
-    store.dispatch(setCanvasObjects(newObjects));
+    store.dispatch(dispatchDelta({
+      type: 'ADD',
+      targetId: obj.id,
+      before: null,
+      after: obj
+    }));
+    
     if (setActiveTool) setActiveTool(obj.type);
     if (setSelectedId) setSelectedId(obj.id);
   }
 
   const addText = () => {
-    const newText = {
-      id: Date.now(),
-      type: 'text',
-      props: {
-        text: 'New Text',
-        left: 200,
-        top: 200,
-        angle: 0,
-        fill: '#000000',
-        fontSize: 30,
-        fontFamily: 'Arial',
-        opacity: 1,
-        textEffect: 'straight'
-      },
-    };
-    handleAddText(newText);
+    handleAddText({
+      id: uuidv4(), type: 'text',
+      props: { ...BASE_TEXT_PROPS, text: 'New Text', left: 200, top: 200, fontSize: 30, fontFamily: 'Arial' }
+    });
   };
 
   const addHeading = () => {
-    const newText = {
-      id: Date.now(),
-      type: 'text',
-      props: {
-        text: 'Heading',
-        left: 200,
-        top: 200,
-        angle: 0,
-        fill: '#000000',
-        fontSize: 68,
-        fontFamily: 'Helvetica Neue',
-        fontWeight: 'bold',
-        opacity: 1,
-        textEffect: 'straight'
-      },
-    };
-    handleAddText(newText);
+    handleAddText({
+      id: uuidv4(), type: 'text',
+      props: { ...BASE_TEXT_PROPS, text: 'Heading', left: 200, top: 200, fontSize: 68, fontFamily: 'Helvetica Neue', fontWeight: 'bold' }
+    });
   };
 
   const addSubheading = () => {
-    const newText = {
-      id: Date.now(),
-      type: 'text',
-      props: {
-        text: 'Sub Heading',
-        left: 200,
-        top: 200,
-        angle: 0,
-        fill: '#000000',
-        fontSize: 50,
-        fontFamily: 'Helvetica Neue',
-        fontWeight: 'bold',
-        opacity: 1,
-        textEffect: 'straight'
-      },
-    };
-    handleAddText(newText);
+    handleAddText({
+      id: uuidv4(), type: 'text',
+      props: { ...BASE_TEXT_PROPS, text: 'Sub Heading', left: 200, top: 200, fontSize: 50, fontFamily: 'Helvetica Neue', fontWeight: 'bold' }
+    });
   };
 
   return { addText, addHeading, addSubheading };

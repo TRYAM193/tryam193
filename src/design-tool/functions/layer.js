@@ -1,13 +1,17 @@
-// src/functions/layer.js
+// src/design-tool/functions/layer.js
 import { store } from '../redux/store';
-import { setCanvasObjects } from '../redux/canvasSlice';
+import { dispatchDelta } from '../redux/canvasSlice';
 
-/**
- * Replaces the current canvas object array with a new, reordered array.
- * This is used specifically after a drag-and-drop operation.
- * @param {Array} newObjects - The newly ordered array of canvas objects.
- */
 export function reorderLayers(newObjects) {
-  // Dispatch the new, reordered array to Redux history
-  store.dispatch(setCanvasObjects(newObjects));
+  // 1. Grab the current array layout before the user dragged the layer
+  const state = store.getState();
+  const currentObjects = state.canvas.present;
+
+  // 2. 🚀 Dispatch the REORDER receipt!
+  store.dispatch(dispatchDelta({
+    type: 'REORDER',
+    targetId: 'ALL',
+    before: currentObjects, // The old layout (for Undo)
+    after: newObjects       // The new layout (for Redo / Present State)
+  }));
 }

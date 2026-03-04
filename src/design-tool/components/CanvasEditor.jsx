@@ -90,30 +90,29 @@ export default function CanvasEditor({
     const copiedObjects = canvasObjects.filter(obj => selectedObjectUUIDs.includes(obj.id));
     dispatch(setClipboard(copiedObjects));
 
-    // Dispatch a REMOVE delta for each cut object
-    copiedObjects.forEach(obj => {
-      dispatch(dispatchDelta({ type: 'REMOVE', targetId: obj.id, before: obj, after: null }));
-    });
+    // 🚀 BATCH FIX: Delete them all in one receipt
+    const batchDeltas = copiedObjects.map(obj => ({
+       type: 'REMOVE', targetId: obj.id, before: obj, after: null 
+    }));
+    if (batchDeltas.length > 0) dispatch(dispatchDelta(batchDeltas));
+    
     fabricCanvasRef.current?.discardActiveObject();
   };
 
   const handlePaste = () => {
     if (!clipboard || clipboard.length === 0) return;
 
-    clipboard.forEach(obj => {
+    // 🚀 BATCH FIX: Add them all in one receipt
+    const batchDeltas = clipboard.map(obj => {
       const newId = uuidv4();
       const newObj = {
-        ...obj,
-        id: newId,
-        props: {
-          ...obj.props,
-          left: (obj.props.left || 0) + 20, 
-          top: (obj.props.top || 0) + 20
-        }
+        ...obj, id: newId,
+        props: { ...obj.props, left: (obj.props.left || 0) + 20, top: (obj.props.top || 0) + 20 }
       };
-      // Dispatch an ADD delta instead of full array replacement
-      dispatch(dispatchDelta({ type: 'ADD', targetId: newId, before: null, after: newObj }));
+      return { type: 'ADD', targetId: newId, before: null, after: newObj };
     });
+
+    if (batchDeltas.length > 0) dispatch(dispatchDelta(batchDeltas));
   };
 
   const handleDuplicate = () => {
@@ -372,23 +371,7 @@ export default function CanvasEditor({
       updateMenuPosition();
     };
 
-    // 🛑 2. CAPTURE "BEFORE" STATE ON CLICK
-    const handleMouseDown = (e) => {
-      const obj = e.target;
-      if (obj && obj.customId) {
-        beforeStateRef.current = {
-          left: obj.left,
-          top: obj.top,
-          scaleX: obj.scaleX,
-          scaleY: obj.scaleY,
-          angle: obj.angle,
-          width: obj.width,
-          height: obj.height
-        };
-      }
-    };
-
-    // 🛑 3. DISPATCH DELTA ON RELEASE
+    // 🚀 THE NEW ENGINE: No mouse:down tracker needed! We compare Fabric directly to Redux!
     const handleObjectModified = (e) => {
       if (isSyncingRef.current) return;
       updateMenuPosition();
@@ -399,23 +382,52 @@ export default function CanvasEditor({
       setSelectedId(obj.customId);
       setActiveTool(obj.textEffect === 'circle' ? 'circle-text' : obj.type);
 
+      // Grab the "Before" state directly from the pristine Redux store!
+      const currentReduxState = store.getState().canvas.present;
+
+      // --- 📦 BATCH SELECTION LOGIC ---
       if (obj.type === 'activeselection') {
-        // Group logic: Discard active selection and dispatch updates for all children
         setTimeout(() => {
           const children = [...obj.getObjects()];
-          canvas.discardActiveObject();
+          canvas.discardActiveObject(); // Instantly converts them back to Absolute Coordinates!
+
+          const batchDeltas = [];
 
           children.forEach((child) => {
-             // We dispatch individual deltas for each object in the group
-             // (Ideally we would have a 'before' state array for groups, but for simplicity we just read the new state)
-             dispatch(dispatchDelta({
-                type: 'UPDATE',
-                targetId: child.customId,
-                before: {}, // Fallback for groups
-                after: { left: child.left, top: child.top, angle: child.angle, scaleX: child.scaleX, scaleY: child.scaleY, width: child.width, height: child.height }
-             }));
+             const reduxObj = currentReduxState.find(o => o.id === child.customId);
+             if (reduxObj) {
+                 // Verify the object actually moved before making a receipt
+                 if (
+                    Math.abs(reduxObj.props.left - child.left) > 0.1 ||
+                    Math.abs(reduxObj.props.top - child.top) > 0.1 ||
+                    Math.abs(reduxObj.props.scaleX - child.scaleX) > 0.01 ||
+                    Math.abs(reduxObj.props.scaleY - child.scaleY) > 0.01 ||
+                    Math.abs(reduxObj.props.angle - child.angle) > 0.1
+                 ) {
+                     batchDeltas.push({
+                        type: 'UPDATE',
+                        targetId: child.customId,
+                        before: {
+                           left: reduxObj.props.left, top: reduxObj.props.top,
+                           scaleX: reduxObj.props.scaleX, scaleY: reduxObj.props.scaleY,
+                           angle: reduxObj.props.angle, width: reduxObj.props.width, height: reduxObj.props.height
+                        },
+                        after: {
+                           left: child.left, top: child.top,
+                           scaleX: child.scaleX, scaleY: child.scaleY,
+                           angle: child.angle, width: child.width, height: child.height
+                        }
+                     });
+                 }
+             }
           });
 
+          // Dispatch all updates instantly in a single receipt!
+          if (batchDeltas.length > 0) {
+             dispatch(dispatchDelta(batchDeltas));
+          }
+
+          // Quietly rebuild the selection box for the user
           if (children.length > 0) {
             const sel = new fabric.ActiveSelection(children, { canvas });
             canvas.setActiveObject(sel);
@@ -425,26 +437,33 @@ export default function CanvasEditor({
         return;
       }
 
-      // Single Object Logic: Build the receipt and send it to Redux!
-      if (beforeStateRef.current && obj.customId) {
-        const afterState = {
-          left: obj.left,
-          top: obj.top,
-          scaleX: obj.scaleX,
-          scaleY: obj.scaleY,
-          angle: obj.angle,
-          width: obj.width,
-          height: obj.height
-        };
-
-        dispatch(dispatchDelta({
-          type: 'UPDATE',
-          targetId: obj.customId,
-          before: beforeStateRef.current,
-          after: afterState
-        }));
-
-        beforeStateRef.current = null; // Reset
+      // --- 🖌️ SINGLE OBJECT LOGIC ---
+      if (obj.customId) {
+         const reduxObj = currentReduxState.find(o => o.id === obj.customId);
+         if (reduxObj) {
+             if (
+                Math.abs(reduxObj.props.left - obj.left) > 0.1 ||
+                Math.abs(reduxObj.props.top - obj.top) > 0.1 ||
+                Math.abs(reduxObj.props.scaleX - obj.scaleX) > 0.01 ||
+                Math.abs(reduxObj.props.scaleY - obj.scaleY) > 0.01 ||
+                Math.abs(reduxObj.props.angle - obj.angle) > 0.1
+             ) {
+                 dispatch(dispatchDelta({
+                    type: 'UPDATE',
+                    targetId: obj.customId,
+                    before: {
+                       left: reduxObj.props.left, top: reduxObj.props.top,
+                       scaleX: reduxObj.props.scaleX, scaleY: reduxObj.props.scaleY,
+                       angle: reduxObj.props.angle, width: reduxObj.props.width, height: reduxObj.props.height
+                    },
+                    after: {
+                       left: obj.left, top: obj.top,
+                       scaleX: obj.scaleX, scaleY: obj.scaleY,
+                       angle: obj.angle, width: obj.width, height: obj.height
+                    }
+                 }));
+             }
+         }
       }
     };
 
@@ -455,7 +474,6 @@ export default function CanvasEditor({
       if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') obj.set('paintFirst', 'stroke');
     });
 
-    canvas.on('mouse:down', handleMouseDown);
     canvas.on('selection:created', handleSelection);
     canvas.on('selection:updated', handleSelection);
     canvas.on('selection:cleared', handleCleared);
@@ -465,7 +483,6 @@ export default function CanvasEditor({
     canvas.on('object:modified', handleObjectModified);
 
     return () => {
-      canvas.off('mouse:down', handleMouseDown);
       canvas.off('selection:created', handleSelection);
       canvas.off('selection:updated', handleSelection);
       canvas.off('selection:cleared', handleCleared);

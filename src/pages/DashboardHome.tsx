@@ -195,7 +195,7 @@ export default function DashboardHome() {
                 variant="ghost"
                 size="sm"
                 className="text-slate-400 hover:text-white hover:bg-white/5 gap-1"
-                onClick={() => navigate('/dashboard/templates')}
+                onClick={() => navigate('/dashboard/designs')}
               >
                 View All <ArrowRight className="h-4 w-4" />
               </Button>

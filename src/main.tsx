@@ -18,7 +18,6 @@ import DashboardOrders from "./pages/DashboardOrders";
 import DashboardSettings from "./pages/DashboardSettings";
 import { AuthProvider } from "./hooks/use-auth";
 import DesignEditorPage from "./pages/DesignEditorPage";
-import ThumbnailGenerator from "./pages/ThumbnailGenerator";
 import Storefront from './pages/StoreFront.tsx';
 import AdminProductManager from "./pages/AdminProductManager.tsx";
 import OrderCheckoutPage from './pages/OrderCheckoutPage';
@@ -84,7 +83,6 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/design/*" element={<DesignEditorPage />} />
               <Route path="orders/:orderId" element={<OrderDetailsPage />} />
 
-              <Route path="/generator" element={<ThumbnailGenerator />} />
               {/* Dashboard Routes */}
               <Route path="/dashboard" element={<DashboardLayout />}>
                 <Route index element={<DashboardHome />} />

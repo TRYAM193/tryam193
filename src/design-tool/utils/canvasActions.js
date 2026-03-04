@@ -5,8 +5,10 @@ import { dispatchDelta } from '../redux/canvasSlice';
 export const handleCanvasAction = (action, selectedIds, canvasObjects, dispatch, setCanvasObjects, setActiveTool, setSelectedId, handleCopy, handlePaste) => {
   if (!selectedIds || selectedIds.length === 0 || !canvasObjects) return;
 
-  // Helper to find original object
   const getObj = (id) => canvasObjects.find(o => o.id === id);
+  
+  // 🚀 THE BATCH ARRAY: Holds all updates to process in a single click
+  const batchDeltas = [];
 
   switch (action) {
     // --- DELETE (Multi) ---
@@ -14,12 +16,14 @@ export const handleCanvasAction = (action, selectedIds, canvasObjects, dispatch,
       selectedIds.forEach(id => {
         const obj = getObj(id);
         if (obj) {
-          dispatch(dispatchDelta({ type: 'REMOVE', targetId: id, before: obj, after: null }));
+          batchDeltas.push({ type: 'REMOVE', targetId: id, before: obj, after: null });
         }
       });
+      // Fire them all at once!
+      if (batchDeltas.length > 0) dispatch(dispatchDelta(batchDeltas));
       setActiveTool(null);
       setSelectedId(null);
-      return; // Exit early, Delta handles Redux
+      return; 
 
     // --- DUPLICATE (Multi) ---
     case 'duplicate':
@@ -36,9 +40,10 @@ export const handleCanvasAction = (action, selectedIds, canvasObjects, dispatch,
               top: (obj.props.top || 0) + 20
             }
           };
-          dispatch(dispatchDelta({ type: 'ADD', targetId: newId, before: null, after: newObj }));
+          batchDeltas.push({ type: 'ADD', targetId: newId, before: null, after: newObj });
         }
       });
+      if (batchDeltas.length > 0) dispatch(dispatchDelta(batchDeltas));
       return;
 
     // --- LOCK/UNLOCK (Multi) ---
@@ -51,7 +56,7 @@ export const handleCanvasAction = (action, selectedIds, canvasObjects, dispatch,
       selectedIds.forEach(id => {
         const obj = getObj(id);
         if (obj) {
-          dispatch(dispatchDelta({
+          batchDeltas.push({
             type: 'UPDATE',
             targetId: id,
             before: { 
@@ -64,9 +69,10 @@ export const handleCanvasAction = (action, selectedIds, canvasObjects, dispatch,
               lockRotation: targetLockState, lockScalingX: targetLockState, 
               lockScalingY: targetLockState, hasControls: !targetLockState 
             }
-          }));
+          });
         }
       });
+      if (batchDeltas.length > 0) dispatch(dispatchDelta(batchDeltas));
       return;
 
     // --- FLIP (Multi) ---
@@ -76,14 +82,15 @@ export const handleCanvasAction = (action, selectedIds, canvasObjects, dispatch,
       selectedIds.forEach(id => {
         const obj = getObj(id);
         if (obj) {
-          dispatch(dispatchDelta({
+          batchDeltas.push({
             type: 'UPDATE',
             targetId: id,
             before: { [prop]: obj.props[prop] },
             after: { [prop]: !obj.props[prop] }
-          }));
+          });
         }
       });
+      if (batchDeltas.length > 0) dispatch(dispatchDelta(batchDeltas));
       return;
 
     case 'copy':
@@ -95,8 +102,8 @@ export const handleCanvasAction = (action, selectedIds, canvasObjects, dispatch,
       return;
   }
 
-  // --- LAYERING (Multi - Uses REORDER Delta) ---
-  // Layering is the only action that requires tracking the entire array order
+  // --- LAYERING (Multi) ---
+  // Layering uses the single 'REORDER' receipt, which is already perfectly batched!
   let newObjects = [...canvasObjects];
 
   if (action === 'bringToFront') {
@@ -121,14 +128,13 @@ export const handleCanvasAction = (action, selectedIds, canvasObjects, dispatch,
           [newObjects[idx], newObjects[idx - 1]] = [newObjects[idx - 1], newObjects[idx]];
       }
   } else {
-      return; // If it didn't match anything, do nothing
+      return; 
   }
 
-  // Dispatch the REORDER receipt
   dispatch(dispatchDelta({ 
       type: 'REORDER', 
       targetId: 'ALL', 
-      before: canvasObjects, // The old array layout
-      after: newObjects      // The new array layout
+      before: canvasObjects, 
+      after: newObjects      
   }));
 };

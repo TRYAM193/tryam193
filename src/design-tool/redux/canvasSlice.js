@@ -20,92 +20,95 @@ const canvasSlice = createSlice({
       state.future = [];
     },
 
-    // 2. 🆕 THE DELTA ENGINE: Handles tiny property changes instead of full arrays
+   // 2. THE DELTA ENGINE (Now supports Batching!)
     dispatchDelta: (state, action) => {
-      const delta = action.payload; // Shape: { type: 'ADD'|'REMOVE'|'UPDATE', targetId, before, after }
+      const payload = action.payload;
+      
+      // Save the exact payload to history (whether it's a single object or an Array)
+      state.past.push(payload);
+      if (state.past.length > MAX_HISTORY) state.past.shift();
 
-      // A. Save the receipt to the past (and enforce the 50-step memory limit)
-      state.past.push(delta);
-      if (state.past.length > MAX_HISTORY) {
-        state.past.shift();
-      }
+      // Convert to array to process uniformly
+      const deltas = Array.isArray(payload) ? payload : [payload];
 
-      // B. Apply the change directly to the present state
-      if (delta.type === 'UPDATE') {
-        const objIndex = state.present.findIndex(o => o.id === delta.targetId);
-        if (objIndex !== -1) {
-          // Merge the new properties onto the existing object's props
-          state.present[objIndex].props = { ...state.present[objIndex].props, ...delta.after };
+      deltas.forEach(delta => {
+        if (delta.type === 'UPDATE') {
+          const objIndex = state.present.findIndex(o => o.id === delta.targetId);
+          if (objIndex !== -1) {
+            state.present[objIndex].props = { ...state.present[objIndex].props, ...delta.after };
+          }
+        } 
+        else if (delta.type === 'ADD') {
+          state.present.push(delta.after);
+        } 
+        else if (delta.type === 'REMOVE') {
+          state.present = state.present.filter(o => o.id !== delta.targetId);
         }
-      } 
-      else if (delta.type === 'ADD') {
-        state.present.push(delta.after);
-      } 
-      else if (delta.type === 'REMOVE') {
-        state.present = state.present.filter(o => o.id !== delta.targetId);
-      }
-      else if (delta.type === 'REORDER') {
-        state.present = delta.after; // After is the newly sorted array
-      }
+        else if (delta.type === 'REORDER') {
+          state.present = delta.after;
+        }
+      });
 
-      // C. Clear future whenever a new action is taken
-      state.future = [];
+      state.future = []; // Clear future
     },
 
-    // 3. 🆕 THE NEW UNDO: Reads the receipt backwards
+    // 3. THE NEW UNDO
     undo: (state) => {
       if (state.past.length === 0) return;
       
-      const lastDelta = state.past.pop();
-      state.future.unshift(lastDelta); // Move receipt to future for Redo
+      const lastPayload = state.past.pop();
+      state.future.unshift(lastPayload); 
       if (state.future.length > MAX_HISTORY) state.future.pop();
 
-      if (lastDelta.type === 'UPDATE') {
-        const objIndex = state.present.findIndex(o => o.id === lastDelta.targetId);
-        if (objIndex !== -1) {
-          // Apply the BEFORE properties back to the object
-          state.present[objIndex].props = { ...state.present[objIndex].props, ...lastDelta.before };
+      const deltas = Array.isArray(lastPayload) ? lastPayload : [lastPayload];
+      
+      // Reverse array when undoing so layered objects undo in perfect order
+      [...deltas].reverse().forEach(delta => {
+        if (delta.type === 'UPDATE') {
+          const objIndex = state.present.findIndex(o => o.id === delta.targetId);
+          if (objIndex !== -1) {
+            state.present[objIndex].props = { ...state.present[objIndex].props, ...delta.before };
+          }
+        } 
+        else if (delta.type === 'ADD') {
+          state.present = state.present.filter(o => o.id !== delta.targetId);
+        } 
+        else if (delta.type === 'REMOVE') {
+          state.present.push(delta.before);
         }
-      } 
-      else if (lastDelta.type === 'ADD') {
-        // Undoing an ADD means we REMOVE it
-        state.present = state.present.filter(o => o.id !== lastDelta.targetId);
-      } 
-      else if (lastDelta.type === 'REMOVE') {
-        // Undoing a REMOVE means we ADD IT BACK using the `before` state
-        state.present.push(lastDelta.before);
-      }
-      else if (lastDelta.type === 'REORDER') {
-        state.present = lastDelta.before; // Revert to the old sort order
-      }
+        else if (delta.type === 'REORDER') {
+          state.present = delta.before;
+        }
+      });
     },
 
-    // 4. 🆕 THE NEW REDO: Reads the receipt forwards
+    // 4. THE NEW REDO
     redo: (state) => {
       if (state.future.length === 0) return;
       
-      const nextDelta = state.future.shift();
-      state.past.push(nextDelta);
+      const nextPayload = state.future.shift();
+      state.past.push(nextPayload);
       if (state.past.length > MAX_HISTORY) state.past.shift();
 
-      if (nextDelta.type === 'UPDATE') {
-        const objIndex = state.present.findIndex(o => o.id === nextDelta.targetId);
-        if (objIndex !== -1) {
-          // Apply the AFTER properties again
-          state.present[objIndex].props = { ...state.present[objIndex].props, ...nextDelta.after };
+      const deltas = Array.isArray(nextPayload) ? nextPayload : [nextPayload];
+
+      deltas.forEach(delta => {
+        if (delta.type === 'UPDATE') {
+          const objIndex = state.present.findIndex(o => o.id === delta.targetId);
+          if (objIndex !== -1) {
+            state.present[objIndex].props = { ...state.present[objIndex].props, ...delta.after };
+          }
+        } 
+        else if (delta.type === 'ADD') {
+          state.present.push(delta.after);
+        } 
+        else if (delta.type === 'REMOVE') {
+          state.present = state.present.filter(o => o.id !== delta.targetId);
         }
-      } 
-      else if (nextDelta.type === 'ADD') {
-        // Redoing an ADD means we add it again
-        state.present.push(nextDelta.after);
-      } 
-      else if (nextDelta.type === 'REMOVE') {
-        // Redoing a REMOVE means we remove it again
-        state.present = state.present.filter(o => o.id !== nextDelta.targetId);
-      }
-      else if (nextDelta.type === 'REORDER') {
-        state.present = nextDelta.after; 
-      }
+        else if (delta.type === 'REORDER') {
+          state.present = delta.after;
+        }
+      });
     },
 
     // (Kept for your other logic)

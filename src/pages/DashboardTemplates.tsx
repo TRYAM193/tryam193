@@ -145,7 +145,7 @@ export default function DashboardTemplates() {
           </div>
 
           {/* Category Filter Dropdown (Mobile) */}
-          <div className="md:hidden w-full">
+          <div className="md:hidden w-full no-scrollbar">
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
               <SelectTrigger className="w-full bg-slate-800/50 border-white/10 text-slate-200 h-10 rounded-full text-sm">
                 <SelectValue placeholder="Category" />
@@ -160,7 +160,7 @@ export default function DashboardTemplates() {
         </div>
 
         {/* Category Pills (Desktop) */}
-        <div className="hidden md:flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="hidden md:flex gap-2 overflow-x-auto pb-2 no-scrollbar">
           {categories.map((cat) => (
             <Badge
               key={cat}

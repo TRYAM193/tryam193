@@ -260,7 +260,6 @@ export const saveNewDesign = async (userId, currentObjects, viewStates, productD
     // 2. Build the doc using finalViewStates
     const designDoc = buildDesignDoc(newId, currentObjects, finalViewStates, productData, userId, currentView, true, thumbnailUrl, name);
     designDoc.userId = userId;
-    console.log(designDoc);
     // 3. Save to Firestore
     const designRef = doc(firestore, `users/${userId}/designs`, newId);
     await setDoc(designRef, designDoc);

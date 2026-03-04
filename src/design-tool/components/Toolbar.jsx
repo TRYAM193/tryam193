@@ -1,10 +1,10 @@
 // src/design-tool/components/Toolbar.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  FiBold, FiItalic, FiUnderline, FiSearch, FiExternalLink,
+  FiBold, FiItalic, FiUnderline,
   FiLoader, FiSlash, FiCircle, FiSmile, FiFrown, FiLayers, FiFlag,
   FiAlignLeft, FiAlignCenter, FiAlignRight, FiType, FiDroplet, FiZap,
-  FiChevronDown, FiCheck, FiSun, FiMaximize2, FiCheckCircle
+  FiChevronDown, FiCheck, FiMaximize2, FiCheckCircle
 } from 'react-icons/fi';
 import { Type, MoveHorizontal } from 'lucide-react';
 import CircleText from '../objectAdders/CircleText';
@@ -490,6 +490,7 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
             <div className="w-[1px] bg-white/10 mx-1"></div>
             <div className="flex items-center justify-center px-2">
               <input type="color" className="w-5 h-5 rounded cursor-pointer bg-transparent border-none p-0" value={liveProps.fill || '#000000'} onChange={(e) => handleColorChange('fill', e.target.value)} />
+              <button onClick={() => handleUpdateAndHistory('fill', 'transparent')} className="ml-2 text-xs text-slate-400 hover:text-white">Transparent</button>
             </div>
 
           </div>
@@ -596,6 +597,7 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
                 <label className="text-[10px] font-bold text-slate-500 uppercase block">Fill</label>
                 <div className="bg-slate-800/50 p-2 rounded-lg border border-white/10 flex items-center gap-2">
                   <input type="color" className="w-full h-6 rounded cursor-pointer bg-transparent" value={liveProps.fill || '#000000'} onChange={(e) => handleColorChange('fill', e.target.value)} />
+                  <button onClick={() => handleUpdateAndHistory('fill', null)} className="ml-2 text-xs text-slate-400 hover:text-white">Transparent</button>
                 </div>
               </div>
             )}

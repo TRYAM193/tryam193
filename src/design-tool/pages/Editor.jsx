@@ -307,8 +307,7 @@ export default function EditorPanel() {
         return true;
     };
 
-    console.log(past)
-    console.log(future)
+    console.log(past, present)
 
     const handlePaste = () => {
         if (!clipboard || clipboard.length === 0) return;

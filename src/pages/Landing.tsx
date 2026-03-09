@@ -93,7 +93,7 @@ export default function Landing() {
               </Button>
             </Link>
 
-            <Link to="/dashboard">
+            <Link to="/auth">
               <Button className="rounded-full px-4 md:px-6 h-9 md:h-10 text-sm md:text-base bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg shadow-orange-900/40 hover:shadow-orange-700/50 hover:scale-105 active:scale-95 transition-all duration-300 group border-0 relative overflow-hidden">
                 <span className="relative z-10 flex items-center gap-2">
                   {t("auth.getStarted")} <ArrowUpRight className="w-4 h-4" />
@@ -171,7 +171,7 @@ export default function Landing() {
               transition={{ delay: 0.3 }}
               className="flex flex-col w-full sm:w-auto sm:flex-row items-center justify-center gap-4 sm:gap-6 pt-8 px-4 sm:px-0"
             >
-              <Link to="/dashboard" className="w-full sm:w-auto">
+              <Link to="/design" className="w-full sm:w-auto">
                 {/* 🎨 HERO CTA BUTTON: The "Trident Power" Button */}
                 <Button size="lg" className="h-16 px-10 text-lg rounded-full bg-white text-slate-900 hover:bg-blue-50 font-bold shadow-[0_0_30px_rgba(255,255,255,0.15)] hover:shadow-[0_0_50px_rgba(255,255,255,0.3)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
                   <span className="relative z-10 flex items-center gap-3">

@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Package, Truck, CheckCircle, Clock, Search, Filter, Lock, ExternalLink, ShoppingBag, ArrowRight } from "lucide-react";
+import { Package, Truck, CheckCircle, Clock, Search, Filter, Zap, ExternalLink, ShoppingBag, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,7 +92,10 @@ export default function DashboardOrders() {
             const price = Number(data.price) || 0;
             displayTitle = data.title;
             displayImage = data.thumbnail || data.image || data.designData?.previewImage;
-            specificTotal = price * qty;
+            
+            // 🧮 USE THE TRUE PAYMENT TOTAL (which includes the anchored discount)
+            specificTotal = data.payment?.total ?? (price * qty); 
+            
             const variantStr = data.variant ? `${data.variant.color || ''} ${data.variant.size || ''}` : 'Custom';
             itemDescription = `${displayTitle} (${variantStr}) x${qty}`;
           }
@@ -110,6 +113,7 @@ export default function DashboardOrders() {
           return {
             id: data.orderId || doc.id,
             rawData: { id: doc.id, ...data },
+            referralDiscountApplied: data.referralDiscountApplied,
             date: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "N/A",
             description: itemDescription,
             total: `${data.payment?.currency || data.currency || '$'} ${specificTotal.toFixed(2)}`,
@@ -137,7 +141,6 @@ export default function DashboardOrders() {
     });
   }, [orders, searchQuery, statusFilter]);
 
-  console.log(filteredOrders)
   const getStatusStyles = (status: string) => {
     switch (status) {
       case "Delivered": return "bg-green-500/20 text-green-400 border-green-500/30";
@@ -273,8 +276,17 @@ export default function DashboardOrders() {
                           {getStatusIcon(order.status)}
                           {order.status}
                         </Badge>
-                        <div className="text-right">
-                          <span className="block font-bold text-white text-lg sm:text-xl">{order.total}</span>
+                        <div className="flex flex-col gap-2 items-center">
+                          <span className="font-bold text-white text-lg">
+                            {order.total}
+                          </span>
+
+                          {/* 🎁 INJECT THE BADGE HERE */}
+                          {order.referralDiscountApplied && (
+                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full border border-orange-500/20">
+                              <Zap className="h-3 w-3" /> Reward Applied
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>

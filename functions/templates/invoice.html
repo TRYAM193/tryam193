@@ -266,6 +266,13 @@
       </div>
       {{/if}}
 
+      {{#if referralDiscount}}
+      <div class="total-row" style="color: #000000; font-weight: 600; white-space: nowrap; gap: 10px;">
+        <span>Referral Reward:</span>
+        <span><strong>-{{currency}} {{referralDiscount}}</strong></span>
+      </div>
+      {{/if}}
+
       <div class="total-row grand-total">
         <span>Grand Total:</span>
         <span>{{currency}} {{grandTotal}}</span>

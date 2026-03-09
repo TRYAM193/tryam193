@@ -19,6 +19,12 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { calculatePriceDetails } from "@/lib/priceUtils";
 import { PriceDisplay } from "@/components/PriceDisplay";
+import { useState, useEffect } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/firebase";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Zap } from "lucide-react";
 
 // ------------------------------------------------------------------
 // 💀 SKELETON COMPONENTS
@@ -82,8 +88,23 @@ export default function CartPage() {
     cartTotal,
     isLoading
   } = useCart();
+  const [hasActiveReward, setHasActiveReward] = useState(false);
+  const [applyReward, setApplyReward] = useState(false);
 
   const { user } = useAuth();
+  // Fetch reward status
+  useEffect(() => {
+    async function fetchRewardStatus() {
+      if (!user) return;
+      const docRef = doc(db, "users", user.uid);
+      const snap = await getDoc(docRef);
+      if (snap.exists() && snap.data().hasActiveReward) {
+        setHasActiveReward(true);
+      }
+    }
+    fetchRewardStatus();
+  }, [user]);
+
   const navigate = useNavigate();
   const cartAnalysis = items.reduce((acc, item) => {
     const { originalPrice, savings } = calculatePriceDetails(item.price, item.productId);
@@ -369,9 +390,38 @@ export default function CartPage() {
 
                         <Separator className="bg-white/10 my-2" />
 
+                        {/* 🎁 THE REWARD TOGGLE */}
+                        {hasActiveReward && (
+                          <div className="flex items-center justify-between p-3 my-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-xl shadow-[0_0_15px_rgba(234,88,12,0.1)]">
+                            <div className="flex items-center gap-3">
+                              <div className="bg-orange-500/20 p-2 rounded-lg">
+                                <Zap className="h-4 w-4 text-orange-400" />
+                              </div>
+                              <div>
+                                <Label htmlFor="reward-toggle" className="text-white font-bold cursor-pointer text-sm">
+                                  Apply ₹100 Credit
+                                </Label>
+                              </div>
+                            </div>
+                            <Switch 
+                              id="reward-toggle" 
+                              checked={applyReward} 
+                              onCheckedChange={setApplyReward} 
+                              className="data-[state=checked]:bg-orange-500"
+                            />
+                          </div>
+                        )}
+
+                        {applyReward && (
+                          <div className="flex justify-between text-sm text-green-400 font-medium">
+                            <span>Referral Reward</span>
+                            <span>-₹100.00</span>
+                          </div>
+                        )}
+
                         <div className="flex justify-between text-xl font-bold text-white pt-2">
                           <span>Total Amount</span>
-                          <span>₹{cartTotal.toFixed(2)}</span>
+                          <span>₹{applyReward ? Math.max(0, cartTotal - 100).toFixed(2) : cartTotal.toFixed(2)}</span>
                         </div>
 
                         {/* 🏆 THE SAVINGS BANNER */}
@@ -381,7 +431,7 @@ export default function CartPage() {
                       </div>
 
                       <Button
-                        onClick={() => navigate(`/checkout?mode=cart`)}
+                        onClick={() => navigate(`/checkout?mode=cart&reward=${applyReward}`)}
                         className="w-full h-12 text-lg font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.02]"
                       >
                         Proceed to Checkout <ArrowRight className="ml-2 h-5 w-5" />

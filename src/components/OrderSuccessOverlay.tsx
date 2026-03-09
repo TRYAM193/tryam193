@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
-import { Check, ShoppingBag, ArrowRight } from "lucide-react";
+import { Check, Crown, ArrowRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { useAuth } from "@/hooks/use-auth";
 
 export function OrderSuccessOverlay() {
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -62,22 +64,48 @@ export function OrderSuccessOverlay() {
 
         {/* Text Content */}
         <div className="space-y-2">
-          <motion.h2 
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="text-3xl font-bold text-white tracking-tight"
-          >
-            Order Placed!
-          </motion.h2>
-          <motion.p 
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            className="text-slate-400"
-          >
-            Thank you for shopping with TRYAM. <br/> Your order has been queued for production.
-          </motion.p>
+          {userProfile?.isFoundingCreator ? (
+            // 👑 FOUNDING CREATOR CELEBRATION
+            <>
+              <motion.h2 
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.5 }}
+                className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 tracking-tight flex items-center justify-center gap-2"
+              >
+                <Crown className="w-8 h-8 text-yellow-400 fill-yellow-400/20" /> 
+                Order Placed!
+              </motion.h2>
+              <motion.p 
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                className="text-yellow-100/80 font-medium max-w-sm mx-auto"
+              >
+                Congratulations! You are officially one of the first 100 <strong className="text-white">TRYAM Founding Creators</strong>!
+              </motion.p>
+            </>
+          ) : (
+            // 📦 STANDARD SUCCESS MESSAGE
+            <>
+              <motion.h2 
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.5 }}
+                className="text-3xl font-bold text-white tracking-tight"
+              >
+                Order Placed!
+              </motion.h2>
+              <motion.p 
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                className="text-slate-400"
+              >
+                Thank you for shopping with TRYAM. <br/> Your order has been queued for production.
+              </motion.p>
+            </>
+          )}
         </div>
 
         {/* Redirect Bar */}

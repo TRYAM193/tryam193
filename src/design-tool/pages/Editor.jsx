@@ -398,7 +398,7 @@ export default function EditorPanel() {
                     setViewStates(savedStates);
 
                     if (designData.canvasViewStates) {
-                        setCanvasViewStates(designData.canvasViewStates);
+                        setCanvasViewStates(JSON.parse(designData.canvasViewStates));
                     }
 
                     const activeView = designData.productConfig.activeView || 'front';
@@ -907,7 +907,7 @@ export default function EditorPanel() {
                 if (sideJson && sideJson.objects) {
                     sideJson.objects = await updateImgSrc(sideJson.objects);
                 }
-                result[side] = sideJson;
+                result[side] = JSON.stringify(sideJson);
             }
             return result;
         }

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router";
 import {
   Truck, Calendar, MapPin, ExternalLink,
-  ArrowLeft, RefreshCw, Loader2, Check, Circle,
+  ArrowLeft, RefreshCw, Loader2, Check, Circle, Zap,
   Printer, Shirt, CreditCard, ShieldCheck, HelpCircle, AlertCircle,
   Sparkles, Archive, FileImage, Download, Phone, Send, MessageSquare, XCircle
 } from "lucide-react";
@@ -597,7 +597,7 @@ export default function OrderDetailsPage() {
       const docRef = doc(db, "orders", orderId);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        if(docSnap.data().userId !== user?.uid) return navigate('/*')
+        if (docSnap.data().userId !== user?.uid) return navigate('/*')
         setOrder({ id: docSnap.id, ...docSnap.data() });
       } else {
         toast.error("Order not found");
@@ -678,9 +678,7 @@ export default function OrderDetailsPage() {
     return date.toLocaleDateString("en-US", { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const specificOrderTotal = order
-    ? (Number(order.price) * Number(order.quantity))
-    : 0;
+  const specificOrderTotal = order?.payment?.total ?? (order ? (Number(order.price) * Number(order.quantity)) : 0);
 
   const currencySymbol = order?.payment?.currency || order?.currency || '$';
 
@@ -807,8 +805,19 @@ export default function OrderDetailsPage() {
                     </div>
 
                     <div className="space-y-1">
-                      <span className="text-xs uppercase text-slate-500 font-bold tracking-wider">Price</span>
-                      <p className="text-green-400 font-bold text-lg">{currencySymbol} {order.price}</p>
+                      <span className="text-xs uppercase text-slate-500 font-bold tracking-wider">Price Paid</span>
+                      <div className="flex flex-col">
+                        <p className="text-green-400 font-bold text-lg">
+                          {currencySymbol} {specificOrderTotal.toFixed(2)}
+                        </p>
+                        
+                        {/* 🎁 GLOWING REWARD BADGE */}
+                        {order.referralDiscountApplied && (
+                          <div className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-orange-400 bg-orange-500/10 px-2 py-1 rounded-md border border-orange-500/20 w-fit">
+                            <Zap className="h-3 w-3" /> Includes -{currencySymbol}100 Reward
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="col-span-2 pt-2">

@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import {
-  ArrowRight, Clock, Store, Sparkles, Crown, Zap, Flame, Moon,
+  ArrowRight, Clock, Store, Sparkles, Crown, Zap, Flame, Moon, Copy, Check, Share2, Loader2,
   Image as ImageIcon, Plus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,9 @@ import { Link, useNavigate } from "react-router"; // Changed to react-router-dom
 import { useTranslation } from "@/hooks/use-translation";
 import { useUserDesigns } from "@/hooks/use-user-designs"; // Ensure correct path
 import { useEffect, useState } from "react";
-import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/firebase";
+import { toast } from "sonner";
 
 export default function DashboardHome() {
   const { isAuthenticated, user, userProfile } = useAuth();
@@ -24,6 +25,11 @@ export default function DashboardHome() {
   // 2. DATA: Recommended Templates (Firestore)
   const [templates, setTemplates] = useState<any[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
+  const referralCount = userProfile?.referralCount || 0;
+  const hasActiveReward = userProfile?.hasActiveReward || false;
+  const progressPercent = Math.min((referralCount / 3) * 100, 100);
+  const [copied, setCopied] = useState(false);
+  const [isClaiming, setIsClaiming] = useState(false); // 👈 Add this
 
   useEffect(() => {
     // Fetch top 10 newest templates
@@ -45,6 +51,41 @@ export default function DashboardHome() {
   const handleOpenDesign = (id: string) => window.open(`/design?designId=${id}`, '_blank');
   const handleUseTemplate = (id: string) => window.open(`/design?templateId=${id}`, '_blank');
   const handleCreateNew = () => window.open('/design', '_blank');
+  const handleClaimReward = async () => {
+    if (!user?.uid) return;
+    setIsClaiming(true);
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      // This activates the ₹100 credit toggle in their checkout
+      await updateDoc(userRef, { hasActiveReward: true });
+      toast.success("₹100 credited! Apply it at checkout.");
+    } catch (error) {
+      toast.error("Failed to claim reward.");
+      console.error(error);
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+  const handleShare = async () => {
+    if (!userProfile?.referralCode) return;
+    const link = `${window.location.origin}?ref=${userProfile.referralCode}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'TRYAM - Custom T-Shirts',
+          text: 'Here is my referral link for ₹100 off your first custom T-shirt on TRYAM!',
+          url: link,
+        });
+      } catch (error) {
+        console.log('Error sharing:', error);
+      }
+    } else {
+      // Fallback if they are on a very old browser
+      navigator.clipboard.writeText(link);
+      toast.success("Link copied! Share it anywhere.");
+    }
+  };
 
   return (
     <div className="space-y-8 md:space-y-12 pb-20 relative px-4 sm:px-6 md:px-10">
@@ -58,15 +99,147 @@ export default function DashboardHome() {
 
       {/* ✅ HERO SECTION (Preserved from your code) */}
       <section className="space-y-4 pt-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-2">
+        {/* SECTION: REFER & EARN (GAMIFIED) */}
+        <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900/50 p-6 backdrop-blur-md shadow-xl shadow-black/20">
+          {/* Background glow effects */}
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-orange-500/10 rounded-full blur-[50px]" />
+          <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-500/10 rounded-full blur-[50px]" />
+
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+
+            {/* Left Side: Text & Progress */}
+              <div className="w-full md:w-1/2 space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-orange-400" />
+                    {hasActiveReward 
+                      ? "Reward Ready to Use! 🎉" 
+                      : referralCount >= 3 
+                        ? "Goal Reached! 🏆" 
+                        : "Invite Friends, Get ₹100"}
+                  </h2>
+                  <p className="text-sm text-slate-400 mt-1">
+                    {hasActiveReward 
+                      ? "Your ₹100 credit is active! Spend it on your next order to unlock your next streak."
+                      : referralCount >= 3
+                        ? "You successfully invited 3 friends who made a purchase. Claim your reward now!"
+                        : "Invite 3 friends to buy their first T-shirt and unlock a ₹100 credit for your next order!"}
+                  </p>
+                </div>
+
+                {/* THE 3-STATE GAMIFICATION UI */}
+                {hasActiveReward ? (
+                  // STATE 3: Claimed & Ready to Spend
+                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-sm font-bold">
+                    <Check className="w-4 h-4" /> ₹100 Credit Active in Checkout
+                  </div>
+                ) : referralCount >= 3 ? (
+                  // STATE 2: Bar Full, Ready to Claim
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
+                      <span className="text-slate-400">Progress</span>
+                      <span className="text-green-400">3 / 3 Friends</span>
+                    </div>
+                    <div className="h-2.5 w-full bg-slate-800 rounded-full overflow-hidden border border-white/5">
+                      <div className="h-full bg-green-500 w-full rounded-full shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
+                    </div>
+                    <Button 
+                      onClick={handleClaimReward} 
+                      disabled={isClaiming}
+                      className="w-full sm:w-auto bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold shadow-lg shadow-green-900/20"
+                    >
+                      {isClaiming ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                      Claim ₹100 Credit
+                    </Button>
+                  </div>
+                ) : (
+                  // STATE 1: In Progress
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
+                      <span className="text-slate-400">Progress</span>
+                      <span className="text-orange-400">{referralCount} / 3 Friends</span>
+                    </div>
+                    <div className="h-2.5 w-full bg-slate-800 rounded-full overflow-hidden border border-white/5">
+                      <div 
+                        className="h-full bg-gradient-to-r from-orange-600 to-orange-400 transition-all duration-500 rounded-full" 
+                        style={{ width: `${progressPercent}%` }} 
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            {/* Right Side: Copy Link Action */}
+            <div className="w-full md:w-auto flex flex-col items-center gap-3 bg-slate-950/50 p-4 rounded-xl border border-white/5">
+              <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Your Unique Link</span>
+              <div className="flex items-center gap-2 w-full">
+                <div className="bg-slate-900 border border-slate-700 text-slate-300 px-3 py-2.5 rounded-lg text-sm font-mono truncate w-40 sm:w-56">
+                  tryam.com?ref={userProfile?.referralCode || 'GENERATING...'}
+                </div>
+
+                {/* 📋 Icon-Only Copy Button */}
+                <Button
+                  disabled={!userProfile?.referralCode}
+                  title="Copy Link"
+                  onClick={() => {
+                    if (!userProfile?.referralCode) return;
+                    const link = `${window.location.origin}?ref=${userProfile.referralCode}`;
+                    navigator.clipboard.writeText(link);
+                    toast.success("Referral link copied!");
+
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className={`relative overflow-hidden transition-all duration-300 w-10 h-10 p-0 flex-shrink-0 flex items-center justify-center rounded-lg ${copied
+                      ? "bg-green-500 hover:bg-green-400 text-white shadow-[0_0_20px_rgba(34,197,94,0.4)] scale-95"
+                      : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-900/40 hover:scale-[1.03] active:scale-95 border-0"
+                    }`}
+                >
+                  <span className="relative z-10 flex items-center justify-center">
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </span>
+                </Button>
+
+                {/* 🚀 Native Share Button */}
+                <Button
+                  disabled={!userProfile?.referralCode}
+                  onClick={handleShare}
+                  title="Share Link"
+                  className="relative overflow-hidden transition-all duration-300 w-10 h-10 p-0 flex-shrink-0 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 hover:border-white/20 hover:text-white shadow-lg hover:scale-[1.03] active:scale-95"
+                >
+                  <Share2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+          </div>
+        </section>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
           <motion.h1
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-2xl md:text-3xl font-bold tracking-tight text-white"
+            className="text-2xl md:text-3xl font-bold tracking-tight text-white flex items-center flex-wrap gap-3"
           >
-            {t("dashboard.welcome")}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-orange-400">
-              {user?.displayName?.split(" ")[0] || "Creator"}
+            <span>
+              {t("dashboard.welcome")},  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-orange-400">
+                {user?.displayName?.split(" ")[0] || "Creator"}
+              </span>
             </span>
+
+            {/* 👑 NEW: FOUNDING CREATOR BADGE */}
+            {userProfile?.isFoundingCreator && (
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", delay: 0.2 }}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/30 shadow-[0_0_20px_rgba(234,179,8,0.15)]"
+              >
+                <Crown className="w-4 h-4 md:w-5 md:h-5 text-yellow-400 fill-yellow-400/20" />
+                <span className="text-xs md:text-sm font-bold bg-clip-text text-transparent bg-gradient-to-r from-yellow-300 to-orange-300 uppercase tracking-wider">
+                  Founding Creator
+                </span>
+              </motion.div>
+            )}
           </motion.h1>
 
           <div className="hidden md:flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-xs text-slate-300">

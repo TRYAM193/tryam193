@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { OrderSuccessOverlay } from "@/components/OrderSuccessOverlay"; // Adjust path
 import { AnimatePresence, motion } from "framer-motion"; // Ensure this is imported
 import { toast } from 'sonner';
+import { Switch } from "@/components/ui/switch";
 
 // Icons
 import {
@@ -38,16 +39,15 @@ import {
   CheckCircle2,
   MapPin,
   AlertCircle,
-  Sparkles
+  Sparkles, Zap, XCircle
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { calculatePriceDetails } from "@/lib/priceUtils";
 import { PriceDisplay } from "@/components/PriceDisplay";
 
-const StripeCheckoutForm = ({ clientSecret, onSuccess, onClose }: any) => {
+const StripeCheckoutForm = ({ clientSecret, shippingInfo, onSuccess, onError }: any) => {
   const stripe = useStripe();
   const elements = useElements();
-  const [error, setError] = useState('');
   const [processing, setProcessing] = useState(false);
 
   const handleSubmit = async (event: any) => {
@@ -55,16 +55,25 @@ const StripeCheckoutForm = ({ clientSecret, onSuccess, onClose }: any) => {
     if (!stripe || !elements) return;
     setProcessing(true);
 
+    // Modern Stripe Confirmation for PaymentElement
     const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
-      confirmParams: { return_url: window.location.href },
-      redirect: "if_required"
+      confirmParams: {
+        payment_method_data: {
+          billing_details: {
+            name: shippingInfo.fullName,
+            email: shippingInfo.email,
+          }
+        }
+      },
+      redirect: 'if_required' // Prevents Stripe from navigating away from your React app
     });
 
     if (error) {
-      setError(error.message || "Payment failed");
       setProcessing(false);
-    } else if (paymentIntent && paymentIntent.status === "succeeded") {
+      onError(error.message || "Your card was declined. Please try again.");
+    } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+      setProcessing(false);
       onSuccess(paymentIntent.id);
     }
   };
@@ -72,7 +81,6 @@ const StripeCheckoutForm = ({ clientSecret, onSuccess, onClose }: any) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-4 pt-4">
       <PaymentElement />
-      {error && <p className="text-red-500 text-sm">{error}</p>}
       <Button type="submit" disabled={!stripe || processing} className="w-full bg-orange-600 hover:bg-orange-500 text-white">
         {processing ? <Loader2 className="animate-spin" /> : "Pay Now"}
       </Button>
@@ -91,6 +99,9 @@ export default function OrderCheckoutPage() {
 
   const mode = searchParams.get('mode') || 'cart';
   const legacyOrderData = location.state?.orderData;
+  const initialReward = searchParams.get('reward') === 'true';
+  const [applyReward, setApplyReward] = useState(initialReward);
+  const [hasActiveReward, setHasActiveReward] = useState(false);
 
   const [items, setItems] = useState<any[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
@@ -99,6 +110,8 @@ export default function OrderCheckoutPage() {
 
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [isPhoneVerified, setIsPhoneVerified] = useState(false); // Local state fallback
+  const [paymentFailed, setPaymentFailed] = useState(false);
+  const [failureReason, setFailureReason] = useState("");
 
   const [isCODAvailable, setIsCODAvailable] = useState(true)
   // Regex for Indian GSTIN
@@ -187,6 +200,7 @@ export default function OrderCheckoutPage() {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             const data = userDoc.data();
+            setHasActiveReward(data.hasActiveReward || false);
             const addr = data.addressObject || {};
             const resolvedCountry = Country.getCountryByCode(addr.countryCode || 'IN')?.name;
             const resolvedState = State.getStateByCodeAndCountry(addr.stateCode || '', addr.countryCode || 'IN')?.name;
@@ -219,41 +233,19 @@ export default function OrderCheckoutPage() {
   const handlePaymentSuccess = async (txnId: string) => {
     setIsProcessing(true);
     try {
-      // 1. The 'pendingOrderId' is actually the GROUP ID (e.g., ORD123)
-      // We need to find ALL sub-orders (ORD1231, ORD1232)
-      const q = query(collection(db, "orders"), where("groupId", "==", pendingOrderId));
-      const snapshot = await getDocs(q);
+      // 🛑 We NO LONGER update the database here!
+      // The secure Razorpay/Stripe webhooks in the backend will mark it 'paid'
+      console.log(`Payment authorized (Txn: ${txnId}). Awaiting backend webhook verification.`);
 
-      if (snapshot.empty) {
-        console.error("No orders found for group:", pendingOrderId);
-        navigate('/dashboard/orders');
-        return;
-      }
-
-      // 2. Batch Update ALL items in the cart
-      const batch = writeBatch(db);
-
-      snapshot.docs.forEach((docSnapshot) => {
-        batch.update(docSnapshot.ref, {
-          status: 'placed',
-          'payment.status': 'paid',
-          'payment.transactionId': txnId,
-          providerStatus: 'pending', // 🟢 Triggers the Qikink/Printify Bot
-          updatedAt: serverTimestamp()
-        });
-      });
-
-      await batch.commit();
-      console.log("✅ All orders marked as paid locally.");
-
-      // 3. Cleanup & Redirect
+      // 1. Clean up the modals and cart
       setShowStripeModal(false);
       clearCart();
-      navigate('/dashboard/orders');
+
+      // 2. Trigger the celebration overlay (which auto-redirects after 3 seconds!)
+      setShowSuccess(true);
 
     } catch (error) {
-      console.error("Client-side update failed:", error);
-      alert("Payment successful, but order status update failed. Please contact support.");
+      console.error("Success handling failed:", error);
       navigate('/dashboard/orders');
     } finally {
       setIsProcessing(false);
@@ -317,7 +309,9 @@ export default function OrderCheckoutPage() {
 
   // Currency Logic
   const currencySymbol = shippingInfo.countryCode === 'US' ? "$" : (shippingInfo.countryCode === 'GB' ? "£" : (['DE', 'FR', 'IT', 'ES', 'NL'].includes(shippingInfo.countryCode) ? "€" : (shippingInfo.countryCode === 'CA') ? "C$" : "₹"));
-  const totalPayAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const basePayAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const isRewardValid = applyReward && hasActiveReward;
+  const totalPayAmount = isRewardValid ? Math.max(0, basePayAmount - 100) : basePayAmount;
 
   if (totalPayAmount >= 3000) setIsCODAvailable(false)
 
@@ -380,12 +374,18 @@ export default function OrderCheckoutPage() {
         return `ORD${timestamp}${random}`;
       };
 
-      const checkoutGroupId = generateCompactId();
+      // 🛑 CRITICAL FIX: Reuse the existing Group ID if they are retrying a failed payment
+      const checkoutGroupId = pendingOrderId || generateCompactId();
+      
+      // Save it to state so we remember it on the next click
+      if (!pendingOrderId) {
+        setPendingOrderId(checkoutGroupId);
+      }
+
       const createdOrderIds: string[] = [];
       const orderDocsPayload: any[] = []; // We keep this to send to the invoice function later
 
       // 1. CREATE SPLIT ORDERS (One per Item Line)
-      // This ensures "Shirt A" and "Mug B" are totally separate documents
       const promises = items.map(async (cartItem, index) => {
 
         // 1. Enrich
@@ -401,10 +401,19 @@ export default function OrderCheckoutPage() {
         createdOrderIds.push(orderId);
 
         let provider = 'gelato';
-        if (shippingInfo.countryCode === 'IN') provider = 'qikink'
+        if (shippingInfo.countryCode === 'IN') provider = 'qikink';
         if (shippingInfo.countryCode === 'US' || shippingInfo.countryCode === 'CA') provider = 'printful';
 
-        // 3. FLATTENED PAYLOAD (The Change)
+        // 🧮 3. NEW MATH: Anchor the discount to the FIRST item only
+        const isFirstItem = index === 0;
+        const appliesToThisItem = isRewardValid && isFirstItem;
+
+        // Calculate what THIS specific item costs
+        const itemBasePrice = cartItem.price * cartItem.quantity;
+        // If it's the anchor item, deduct the ₹100 from its total
+        const itemFinalPrice = appliesToThisItem ? Math.max(0, itemBasePrice - 100) : itemBasePrice;
+
+        // 4. FLATTENED PAYLOAD
         const orderPayload = {
           // A. Order Meta
           orderId: orderId,
@@ -414,9 +423,14 @@ export default function OrderCheckoutPage() {
           createdAt: serverTimestamp(),
           provider,
           shippingAddress: shippingInfo,
+
+          // 🎁 ONLY the first item gets the true flag!
+          referralDiscountApplied: appliesToThisItem,
+
           payment: {
             method: paymentMethod,
-            total: totalPayAmount,
+            total: itemFinalPrice,        // 👈 What THIS specific split-order costs
+            cartTotal: totalPayAmount,    // 👈 Keeping the overall cart total for reference
             currency: currencySymbol,
             status: paymentMethod === 'cod' ? 'pending_cod' : 'pending'
           },
@@ -446,28 +460,53 @@ export default function OrderCheckoutPage() {
         if (!loaded) throw new Error("Razorpay failed");
 
         const createRzpOrder = httpsCallable(functions, 'createRazorpayOrder');
-        const { data }: any = await createRzpOrder({ amount: totalPayAmount, currency: 'INR' });
+        const { data }: any = await createRzpOrder({ 
+          amount: basePayAmount, 
+          currency: 'INR', 
+          applyReferralReward: isRewardValid,
+          groupId: checkoutGroupId // 👈 Pass the Group ID to the backend
+        });
 
         const options = {
           key: data.keyId,
           amount: data.amount,
           currency: data.currency,
-          order_id: data.orderId,
           name: "TRYAM",
-          description: `Order #${checkoutGroupId}`,
-
-          // ⚠️ Pass GroupID in Notes so Webhook can find ALL orders
-          notes: {
-            groupId: checkoutGroupId,
-            type: "split_order"
-          },
-
+          description: "Custom T-Shirt Order",
+          order_id: data.orderId,
           handler: async function (response: any) {
-            await handlePaymentSuccess(response.razorpay_payment_id);
+            // ✅ SUCCESS
+            setIsProcessing(false);
+            setShowSuccess(true);
+            setTimeout(() => {
+              navigate('/dashboard/orders');
+            }, 3000);
           },
-          prefill: { name: shippingInfo.fullName, email: shippingInfo.email }
+          prefill: {
+            name: shippingInfo.fullName,
+            email: shippingInfo.email,
+            contact: shippingInfo.phone,
+          },
+          theme: { color: "#ea580c" },
+          modal: {
+            ondismiss: function () {
+              // 🔴 USER CLOSED THE POPUP
+              setIsProcessing(false);
+              setFailureReason("Payment was cancelled. You have not been charged.");
+              setPaymentFailed(true);
+            }
+          }
         };
+
         const rzp = new (window as any).Razorpay(options);
+
+        // 🔴 BANK DECLINED / TIMEOUT / WRONG OTP
+        rzp.on('payment.failed', function (response: any) {
+          setIsProcessing(false);
+          setFailureReason(response.error.description || "Payment failed. Please try again.");
+          setPaymentFailed(true);
+        });
+
         rzp.open();
         setIsProcessing(false);
       }
@@ -476,9 +515,10 @@ export default function OrderCheckoutPage() {
       else {
         const createStripe = httpsCallable(functions, 'createStripeIntent');
         const { data }: any = await createStripe({
-          amount: totalPayAmount,
+          amount: basePayAmount,
           currency: stripeCurrencyMap[shippingInfo.countryCode] || 'usd',
-          groupId: checkoutGroupId
+          groupId: checkoutGroupId,
+          applyReferralReward: isRewardValid
         });
 
         setStripePromise(loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY));
@@ -505,7 +545,7 @@ export default function OrderCheckoutPage() {
       <p className="text-slate-400">Loading checkout...</p>
     </div>
   );
-  
+
 
   return (
     <div className="min-h-screen relative pb-20 font-sans bg-[#0f172a] text-slate-100 selection:bg-orange-500/30">
@@ -743,7 +783,27 @@ export default function OrderCheckoutPage() {
 
                 <Separator className="bg-white/10 my-4" />
 
-                {/* Replace the simple subtotal div with this block */}
+                {/* 🎁 REWARD TOGGLE (Only for Direct Mode) */}
+                {mode === 'direct' && hasActiveReward && (
+                  <div className="flex items-center justify-between p-3 mb-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-xl shadow-[0_0_15px_rgba(234,88,12,0.1)]">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-orange-500/20 p-2 rounded-lg">
+                        <Zap className="h-4 w-4 text-orange-400" />
+                      </div>
+                      <div>
+                        <Label htmlFor="reward-toggle" className="text-white font-bold cursor-pointer text-sm">
+                          Apply ₹100 Credit
+                        </Label>
+                      </div>
+                    </div>
+                    <Switch
+                      id="reward-toggle"
+                      checked={applyReward}
+                      onCheckedChange={setApplyReward}
+                      className="data-[state=checked]:bg-orange-500"
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm text-slate-400">
@@ -754,10 +814,20 @@ export default function OrderCheckoutPage() {
                     <span>Discount</span>
                     <span>-{currencySymbol}{checkoutAnalysis.totalSavings.toFixed(2)}</span>
                   </div>
+
+                  {/* 🎁 REWARD LINE ITEM */}
+                  {isRewardValid && (
+                    <div className="flex justify-between text-sm text-orange-400 font-bold">
+                      <span>Referral Reward</span>
+                      <span>-{currencySymbol}100.00</span>
+                    </div>
+                  )}
+
                   <div className="flex justify-between text-sm text-slate-400">
                     <span>Shipping</span>
                     <span className="text-green-400">Free</span>
                   </div>
+
                   <div className="flex justify-between text-sm text-slate-400">
                     <span>Incl. of Tax</span>
                   </div>
@@ -793,7 +863,16 @@ export default function OrderCheckoutPage() {
                 <DialogHeader><DialogTitle>Secure Payment</DialogTitle></DialogHeader>
                 {stripeClientSecret && stripePromise && (
                   <Elements stripe={stripePromise} options={{ clientSecret: stripeClientSecret, appearance: { theme: 'night' } }}>
-                    <StripeCheckoutForm onSuccess={handleStripeSuccess} />
+                    <StripeCheckoutForm
+                      clientSecret={stripeClientSecret}
+                      shippingInfo={shippingInfo}
+                      onSuccess={handleStripeSuccess}
+                      onError={(errMsg: string) => {
+                        setShowStripeModal(false);
+                        setFailureReason(errMsg);
+                        setPaymentFailed(true);
+                      }}
+                    />
                   </Elements>
                 )}
               </DialogContent>
@@ -860,6 +939,49 @@ export default function OrderCheckoutPage() {
         phoneNumber={shippingInfo.phone}
       />
 
+      {paymentFailed && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
+          <div className="bg-slate-900 border border-red-500/30 rounded-2xl shadow-2xl shadow-red-900/20 max-w-sm w-full p-8 text-center flex flex-col items-center relative overflow-hidden">
+            {/* Background Glow */}
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-red-500/10 rounded-full blur-[40px]" />
+            <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-orange-500/10 rounded-full blur-[40px]" />
+
+            {/* Icon */}
+            <div className="relative w-20 h-20 mb-6 flex items-center justify-center">
+              <div className="absolute inset-0 bg-red-500/20 rounded-full animate-ping" style={{ animationDuration: '3s' }} />
+              <div className="relative bg-slate-800 rounded-full p-4 border-2 border-red-500/50">
+                <XCircle className="w-10 h-10 text-red-500" />
+              </div>
+            </div>
+
+            {/* Text */}
+            <h2 className="text-2xl font-extrabold text-white mb-2 tracking-tight">Payment Failed</h2>
+            <p className="text-slate-400 text-sm mb-8 leading-relaxed">
+              {failureReason}
+            </p>
+
+            {/* Actions */}
+            <div className="flex flex-col gap-3 w-full relative z-10">
+              <Button
+                onClick={() => setPaymentFailed(false)}
+                className="w-full h-12 text-base font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg text-white rounded-xl border-0"
+              >
+                Try Again
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setPaymentFailed(false);
+                  navigate('/cart');
+                }}
+                className="w-full h-12 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl"
+              >
+                Back to Cart
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,13 +1,46 @@
 import { motion } from "framer-motion";
-import { ArrowRight, Layers, Sparkles, Wand2, Flame, Moon, ArrowUpRight, Menu } from "lucide-react"; // Added Menu
+import { Crown, Layers, Info, Wand2, Flame, Moon, ArrowUpRight, Menu } from "lucide-react"; // Added Menu
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"; // Added Sheet components
 import { useTranslation } from "@/hooks/use-translation";
 import Footer from "@/components/Footer";
+import { useEffect, useState } from "react";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/firebase";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useReferralTracking } from "@/hooks/use-referal"; // Import the referral tracking hook
 
 export default function Landing() {
   const { t } = useTranslation();
+  const [remainingSlots, setRemainingSlots] = useState<number | null>(null);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  
+  const handleMouseEnter = () => {
+    setIsPopoverOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    setTimeout(() => {
+      setIsPopoverOpen(false);
+    }, 200);
+  };
+
+  useReferralTracking(); 
+  useEffect(() => {
+    const launchRef = doc(db, 'app_settings', 'launch_status');
+    
+    // onSnapshot listens for live updates instantly!
+    const unsubscribe = onSnapshot(launchRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const remaining = data.total_slots - data.claimed_slots;
+        setRemainingSlots(remaining > 0 ? remaining : 0);
+      }
+    });
+
+    return () => unsubscribe(); // Cleanup on unmount
+  }, []);
 
   return (
     <div className="min-h-screen relative overflow-hidden flex flex-col font-sans selection:bg-orange-500 selection:text-white">
@@ -158,6 +191,71 @@ export default function Landing() {
                 </Button>
               </Link>
             </motion.div>
+
+            {/* 👑 NEW: LIVE FOUNDING CREATOR SCARCITY COUNTER WITH INFO POPOVER */}
+            {remainingSlots !== null && remainingSlots > 0 && remainingSlots <= 100 && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.5, type: "spring" }}
+                className="mt-8 flex flex-col items-center justify-center"
+              >
+                <div className="inline-flex items-center gap-2 sm:gap-3 px-4 sm:px-5 py-2.5 rounded-full border border-orange-500/40 bg-orange-500/10 backdrop-blur-md shadow-[0_0_25px_rgba(249,115,22,0.25)] relative overflow-hidden group">
+                  {/* Shimmer Effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-400/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+                  
+                  <Flame className="w-5 h-5 text-orange-500 animate-pulse hidden sm:block" />
+                  
+                  <span className="text-orange-100 font-medium text-sm sm:text-base z-10">
+                    Only <span className="text-white font-black text-lg mx-1">{remainingSlots} / 100</span> Founding Creator spots left!
+                  </span>
+
+                 {/* ❓ THE INFO ICON (Hover + Click) */}
+                  <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button 
+                        onMouseEnter={handleMouseEnter}
+                        onMouseLeave={handleMouseLeave}
+                        onClick={() => setIsPopoverOpen(true)}
+                        className="relative z-10 ml-1 p-1.5 rounded-full bg-orange-500/20 hover:bg-orange-500/40 transition-colors text-orange-300 hover:text-white focus:outline-none cursor-help"
+                      >
+                        <Info className="w-4 h-4" />
+                      </button>
+                    </PopoverTrigger>
+                    
+                    <PopoverContent 
+                      onMouseEnter={handleMouseEnter} 
+                      onMouseLeave={handleMouseLeave}
+                      className="w-72 sm:w-80 bg-[#1a2035]/95 backdrop-blur-xl border-orange-500/30 shadow-2xl shadow-black p-5 rounded-2xl z-50" 
+                      sideOffset={15}
+                    >
+                      <div className="space-y-3 relative z-50">
+                        <h4 className="font-bold text-white text-lg flex items-center gap-2">
+                          <Crown className="w-5 h-5 text-orange-500" /> Founding Creator Perks
+                        </h4>
+                        <p className="text-sm text-slate-300 font-light">
+                          Be among the first 100 users to complete an order and unlock lifetime TRYAM benefits:
+                        </p>
+                        <ul className="text-sm space-y-2 mt-2">
+                          <li className="flex items-start gap-2">
+                            <span className="text-orange-500 mt-0.5">✦</span>
+                            <span className="text-slate-200">Exclusive <strong>Founding Creator</strong> profile badge.</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-orange-500 mt-0.5">✦</span>
+                            <span className="text-slate-200">Boosted wallet rewards when referring friends.</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-orange-500 mt-0.5">✦</span>
+                            <span className="text-slate-200">Early VIP access to new AI design tools.</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </motion.div>
+            )}
 
             {/* Hero Visual */}
             <motion.div

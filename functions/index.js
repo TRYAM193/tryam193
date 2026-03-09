@@ -125,19 +125,26 @@ async function generateInvoicePDF(orderData, itemsList) {
     });
 
     // 3. Totals
-    const grandTotal = itemsList.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
+    const rawGrandTotal = itemsList.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
 
-    // For India: Subtotal is the sum of Taxable Values
-    // For Intl: Subtotal is the Grand Total
     const subTotal = isIndia
       ? processedItems.reduce((acc, item) => acc + Number(item.amount), 0)
-      : grandTotal;
+      : rawGrandTotal;
 
     const totalCGST = processedItems.reduce((acc, item) => acc + Number(item.cgst), 0);
     const totalSGST = processedItems.reduce((acc, item) => acc + Number(item.sgst), 0);
 
-    // 4. Words
-    const amountInWords = numberToWords(grandTotal, currencySymbol);
+    // 🎁 NEW: Apply the Referral Discount if it exists
+    let referralDiscountAmount = 0;
+    let finalGrandTotal = rawGrandTotal;
+
+    if (orderData.referralDiscountApplied) {
+      referralDiscountAmount = 100;
+      finalGrandTotal = Math.max(0, rawGrandTotal - referralDiscountAmount);
+    }
+
+    // 4. Words (Must use the FINAL total after discount)
+    const amountInWords = numberToWords(finalGrandTotal, currencySymbol);
 
     const htmlData = {
       documentTitle,
@@ -169,7 +176,8 @@ async function generateInvoicePDF(orderData, itemsList) {
       subTotal: subTotal.toFixed(2),
       cgstTotal: totalCGST.toFixed(2),
       sgstTotal: totalSGST.toFixed(2),
-      grandTotal: grandTotal.toFixed(2),
+      referralDiscount: referralDiscountAmount > 0 ? referralDiscountAmount.toFixed(2) : null, // 👈 Send to template
+      grandTotal: finalGrandTotal.toFixed(2), // 👈 Send adjusted total
       amountInWords: amountInWords
     };
 
@@ -1019,21 +1027,28 @@ async function sendToQikink(orderData, processedItems) {
       });
     }
 
+    // 🧮 CALCULATE EXACT PRICE PAID FOR THIS SPLIT ORDER
+    const lineItemTotal = item.payment?.total ?? (Number(item.price) * Number(item.quantity));
+    const unitPrice = (lineItemTotal / Math.max(1, item.quantity)).toFixed(2);
+
     qikinkLineItems.push({
       search_from_my_products: 0,
       print_type_id: isMug ? 5 : 1,
       quantity: item.quantity,
       sku: finalSku,
-      price: "0",
+      price: unitPrice.toString(), // 👈 Send the exact discounted unit price
       designs: designs
     });
   }
 
+  const orderTotal = orderData.payment?.total ?? 0;
+  const paymentGateway = (orderData.payment?.method === 'cod' || orderData.isCod) ? "COD" : "Prepaid";
+
   const payload = {
     order_number: orderData.orderId,
     qikink_shipping: "1",
-    gateway: "Prepaid",
-    total_order_value: "0",
+    gateway: paymentGateway,
+    total_order_value: orderTotal.toString(),
     shipping_address: {
       first_name: orderData.shippingAddress.fullName.split(" ")[0],
       last_name: orderData.shippingAddress.fullName.split(" ")[1] || ".",
@@ -1457,9 +1472,9 @@ async function renderDesignServerSide(designJson, productId, view = 'front') {
 
   // Filter out Apple/Windows System Fonts so Google Fonts API doesn't crash!
   const systemFonts = [
-      'Arial', 'Helvetica', 'Helvetica Neue', 'HelveticaNeue', 
-      'Times New Roman', 'Courier New', 'Verdana', 'Georgia', 
-      'Comic Sans MS', 'Impact', 'Trebuchet MS'
+    'Arial', 'Helvetica', 'Helvetica Neue', 'HelveticaNeue',
+    'Times New Roman', 'Courier New', 'Verdana', 'Georgia',
+    'Comic Sans MS', 'Impact', 'Trebuchet MS'
   ];
   const googleFontsToLoad = usedFonts.filter(f => !systemFonts.includes(f));
   // =========================================================
@@ -1565,12 +1580,11 @@ exports.processNewOrder = functions
     try {
       const item = newData;
       const printFiles = {};
-      const views = ['front', 'back'];
+      const views = item.designData.canvasViewStates ? Object.keys(item.designData.canvasViewStates) : ['front', 'back'];
 
       // A. Generate Print Files
-      // A. Generate Print Files
       for (const view of views) {
-        const designJson = item.designData?.canvasViewStates?.[view] || item.designData?.viewStates?.[view];
+        const designJson = JSON.parse(item.designData?.canvasViewStates?.[view]) || JSON.parse(item.designData?.viewStates?.[view]);
 
         // Skip if this view has no design data
         if (!designJson || designJson.length === 0) continue;
@@ -1664,23 +1678,46 @@ exports.processNewOrder = functions
 exports.createRazorpayOrder = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Login required');
   try {
-    const order = await razorpay.orders.create({ amount: Math.round(data.amount * 100), currency: data.currency || "INR", payment_capture: 1 });
+    let finalAmount = data.amount;
+
+    // 🛡️ SECURITY: Verify discount eligibility in DB
+    if (data.applyReferralReward) {
+      const userDoc = await db.collection('users').doc(context.auth.uid).get();
+      if (userDoc.exists && userDoc.data().hasActiveReward) {
+        finalAmount = Math.max(0, finalAmount - 100);
+      }
+    }
+
+    const order = await razorpay.orders.create({
+      amount: Math.round(finalAmount * 100),
+      currency: data.currency || "INR",
+      payment_capture: 1,
+      notes: {
+        groupId: data.groupId // 👈 Attach it to Razorpay's notes!
+      }
+    });
+
     return { orderId: order.id, amount: order.amount, currency: order.currency, keyId: functions.config().razorpay.key_id };
   } catch (error) { throw new functions.https.HttpsError('internal', error.message); }
 });
 
 exports.createStripeIntent = functions.https.onCall(async (data, context) => {
-    const { amount, currency, groupId } = data; // 👈 Receive the groupId
+  let finalAmount = data.amount;
 
-    const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(amount * 100), // Stripe expects cents
-        currency: currency,
-        metadata: {
-            groupId: groupId // 👈 Attach it to metadata so the webhook can read it
-        }
-    });
+  // 🛡️ SECURITY: Verify discount eligibility in DB
+  if (data.applyReferralReward) {
+    const userDoc = await db.collection('users').doc(context.auth.uid).get();
+    if (userDoc.exists && userDoc.data().hasActiveReward) {
+      finalAmount = Math.max(0, finalAmount - 100);
+    }
+  }
 
-    return { clientSecret: paymentIntent.client_secret };
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount: Math.round(finalAmount * 100),
+    currency: data.currency,
+    metadata: { groupId: data.groupId }
+  });
+  return { clientSecret: paymentIntent.client_secret };
 });
 
 exports.generateAiImage = functions.https.onCall(async (data, context) => {
@@ -1741,13 +1778,13 @@ exports.razorpayWebhook = functions
 
     // 1. Validate Signature
     const expectedSignature = crypto
-        .createHmac('sha256', secret)
-        .update(req.rawBody.toString())
-        .digest('hex');
+      .createHmac('sha256', secret)
+      .update(req.rawBody.toString())
+      .digest('hex');
 
     if (expectedSignature !== signature) {
-        console.error(`❌ Razorpay Signature Error: Mismatch`);
-        return res.status(400).send("Invalid signature");
+      console.error(`❌ Razorpay Signature Error: Mismatch`);
+      return res.status(400).send("Invalid signature");
     }
 
     // 2. Idempotency
@@ -1757,82 +1794,158 @@ exports.razorpayWebhook = functions
     if (doc.exists) return res.status(200).send("OK");
 
     try {
-        const body = JSON.parse(req.rawBody.toString());
+      const body = JSON.parse(req.rawBody.toString());
 
-        if (body.event === 'payment.captured' || body.event === 'order.paid') {
-            const payload = body.payload.payment.entity;
-            const groupId = payload.notes?.groupId;
-            const amountPaid = payload.amount / 100; // Razorpay is in paise
+      if (body.event === 'payment.captured' || body.event === 'order.paid') {
+        const payload = body.payload.payment.entity;
+        const groupId = payload.notes?.groupId;
+        const amountPaid = payload.amount / 100; // Razorpay is in paise
 
-            if (!groupId) return res.status(400).send("Missing groupId");
+        if (!groupId) return res.status(400).send("Missing groupId");
 
-            // 3. Fetch Group Orders
-            const snapshot = await db.collection("orders").where("groupId", "==", groupId).get();
-            if (snapshot.empty) return res.status(404).send("Orders not found");
+        // 3. Fetch Group Orders
+        const snapshot = await db.collection("orders").where("groupId", "==", groupId).get();
+        if (snapshot.empty) return res.status(404).send("Orders not found");
 
-            const ordersToUpdate = snapshot.docs;
-            const allOrderData = ordersToUpdate.map(d => d.data());
+        const ordersToUpdate = snapshot.docs;
+        const allOrderData = ordersToUpdate.map(d => d.data());
 
-            // 4. 🛡️ FRAUD CHECK
-            // In your frontend, every split order saves the 'totalPayAmount' in payment.total
-            const expectedAmount = allOrderData[0].payment.total; 
-            const userId = allOrderData[0].userId;
+        // 4. 🛡️ FRAUD CHECK
+        // In your frontend, every split order saves the 'totalPayAmount' in payment.total
+        const expectedAmount = allOrderData[0].payment.total;
+        const userId = allOrderData[0].userId;
 
-            if (Math.abs(amountPaid - expectedAmount) > 5) { // 5 Rupee buffer
-                const fraudMsg = `FRAUD: Group ${groupId} paid ${amountPaid} but expected ${expectedAmount}`;
-                console.error(`🚨 ${fraudMsg}`);
+        if (Math.abs(amountPaid - expectedAmount) > 5) { // 5 Rupee buffer
+          const fraudMsg = `FRAUD: Group ${groupId} paid ${amountPaid} but expected ${expectedAmount}`;
+          console.error(`🚨 ${fraudMsg}`);
 
-                const fraudBatch = db.batch();
-                ordersToUpdate.forEach(docSnap => {
-                    fraudBatch.update(docSnap.ref, {
-                        status: 'fraud_alert',
-                        fraudReason: fraudMsg,
-                        'payment.status': 'fraud_flagged'
-                    });
-                });
-                
-                // Ban the user
-                if (userId && userId !== 'guest') {
-                    fraudBatch.update(db.collection('users').doc(userId), {
-                        isBanned: true,
-                        banReason: "Payment Tampering / Fraud Attempt",
-                        bannedAt: admin.firestore.FieldValue.serverTimestamp()
-                    });
-                }
-                await fraudBatch.commit();
-                return res.status(200).send("Fraud Detected");
-            }
-
-            // 5. ✅ SUCCESS: Batch Update
-            const batch = db.batch();
-            ordersToUpdate.forEach((docSnap) => {
-                // Only update if not already processed
-                if (docSnap.data().status !== 'placed') {
-                    batch.update(docSnap.ref, {
-                        status: 'placed',
-                        'payment.status': 'paid',
-                        'payment.transactionId': payload.id,
-                        providerStatus: 'pending', // 🟢 Wakes up your processNewOrder bot!
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                    });
-                }
+          const fraudBatch = db.batch();
+          ordersToUpdate.forEach(docSnap => {
+            fraudBatch.update(docSnap.ref, {
+              status: 'fraud_alert',
+              fraudReason: fraudMsg,
+              'payment.status': 'fraud_flagged'
             });
-            await batch.commit();
-            console.log(`✅ Razorpay Group Order ${groupId} successfully paid.`);
+          });
 
-            // 6. 🧾 GENERATE INVOICE
-            await generateAndSendConsolidatedInvoice(allOrderData);
+          // Ban the user
+          if (userId && userId !== 'guest') {
+            fraudBatch.update(db.collection('users').doc(userId), {
+              isBanned: true,
+              banReason: "Payment Tampering / Fraud Attempt",
+              bannedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+          await fraudBatch.commit();
+          return res.status(200).send("Fraud Detected");
         }
 
-        // Lock Event
-        await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp(), event: body.event });
-        res.status(200).send("OK");
+        // Make Founding Creator
+        if (userId && userId !== 'guest') {
+          try {
+            const launchRef = db.collection('app_settings').doc('launch_status');
+            const userRef = db.collection('users').doc(userId);
+
+            await db.runTransaction(async (t) => {
+              const userDoc = await t.get(userRef);
+              const launchDoc = await t.get(launchRef);
+
+              if (userDoc.exists && launchDoc.exists) {
+                const userData = userDoc.data();
+                const launchData = launchDoc.data();
+
+                if (!userData.isFoundingCreator && launchData.claimed_slots < launchData.total_slots) {
+
+                  // Claim the slot securely
+                  t.update(launchRef, {
+                    claimed_slots: admin.firestore.FieldValue.increment(1)
+                  });
+
+                  // Award the badge to the user
+                  t.update(userRef, {
+                    isFoundingCreator: true
+                  });
+
+                  console.log(`🎉 User ${userId} claimed Founding Creator slot ${launchData.claimed_slots + 1}!`);
+                }
+              }
+            });
+          } catch (err) {
+            console.error("❌ Founding Creator Transaction Error:", err);
+          }
+        }
+        const batch = db.batch();
+
+        const orderData = allOrderData[0];
+        if (orderData.referralDiscountApplied) {
+          batch.update(db.collection('users').doc(userId), {
+            hasActiveReward: false,
+            referralCount: 0
+          });
+        }
+
+        // 2. Increment Referrer's Count (If this is buyer's first purchase)
+        if (userId && userId !== 'guest') {
+          const userDoc = await db.collection('users').doc(userId).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data();
+            if (userData.referredBy && !userData.hasMadeFirstPurchase) {
+              // Mark buyer as converted
+              batch.update(db.collection('users').doc(userId), { hasMadeFirstPurchase: true });
+
+              // Find the friend who invited them
+              const referrerRef = db.collection('users').doc(userData.referredBy);
+              const referrerDoc = await referrerRef.get();
+
+              if (referrerDoc.exists) {
+                const refData = referrerDoc.data();
+
+                // Only increment if they aren't currently locked
+                if (!refData.hasActiveReward) {
+                  const newCount = (refData.referralCount || 0) + 1;
+
+                  if (newCount >= 3) {
+                    // Trigger the lock and reward!
+                    batch.update(referrerRef, { referralCount: 3 });
+                  } else {
+                    // Just increment progress
+                    batch.update(referrerRef, { referralCount: newCount });
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // 5. ✅ SUCCESS: Batch Update
+        ordersToUpdate.forEach((docSnap) => {
+          // Only update if not already processed
+          if (docSnap.data().status !== 'placed') {
+            batch.update(docSnap.ref, {
+              status: 'placed',
+              'payment.status': 'paid',
+              'payment.transactionId': payload.id,
+              providerStatus: 'pending', // 🟢 Wakes up your processNewOrder bot!
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+        });
+        await batch.commit();
+        console.log(`✅ Razorpay Group Order ${groupId} successfully paid.`);
+
+        // 6. 🧾 GENERATE INVOICE
+        await generateAndSendConsolidatedInvoice(allOrderData);
+      }
+
+      // Lock Event
+      await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp(), event: body.event });
+      res.status(200).send("OK");
 
     } catch (error) {
-        console.error("Razorpay Processing Error:", error);
-        res.status(500).send("Internal Server Error");
+      console.error("Razorpay Processing Error:", error);
+      res.status(500).send("Internal Server Error");
     }
-});
+  });
 
 // ------------------------------------------------------------------
 // 💰 2. STRIPE WEBHOOK (Group Orders, Fraud Check, Invoice)
@@ -1847,9 +1960,9 @@ exports.stripeWebhook = functions
 
     // 1. Validate Signature
     try {
-        event = stripe.webhooks.constructEvent(req.rawBody, signature, secret);
+      event = stripe.webhooks.constructEvent(req.rawBody, signature, secret);
     } catch (err) {
-        return res.status(400).send(`Webhook Error: ${err.message}`);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
     // 2. Idempotency
@@ -1859,77 +1972,147 @@ exports.stripeWebhook = functions
     if (doc.exists) return res.status(200).json({ received: true });
 
     try {
-        if (event.type === 'payment_intent.succeeded') {
-            const paymentIntent = event.data.object;
-            const groupId = paymentIntent.metadata?.groupId;
-            const amountPaid = paymentIntent.amount_received / 100; // Stripe is in cents
+      if (event.type === 'payment_intent.succeeded') {
+        const paymentIntent = event.data.object;
+        const groupId = paymentIntent.metadata?.groupId;
+        const amountPaid = paymentIntent.amount_received / 100; // Stripe is in cents
 
-            if (!groupId) return res.status(400).send("Missing groupId");
+        if (!groupId) return res.status(400).send("Missing groupId");
 
-            // 3. Fetch Group Orders
-            const snapshot = await db.collection("orders").where("groupId", "==", groupId).get();
-            if (snapshot.empty) return res.status(404).send("Orders not found");
+        // 3. Fetch Group Orders
+        const snapshot = await db.collection("orders").where("groupId", "==", groupId).get();
+        if (snapshot.empty) return res.status(404).send("Orders not found");
 
-            const ordersToUpdate = snapshot.docs;
-            const allOrderData = ordersToUpdate.map(d => d.data());
+        const ordersToUpdate = snapshot.docs;
+        const allOrderData = ordersToUpdate.map(d => d.data());
 
-            // 4. 🛡️ FRAUD CHECK
-            const expectedAmount = allOrderData[0].payment.total;
-            const userId = allOrderData[0].userId;
+        // 4. 🛡️ FRAUD CHECK
+        const expectedAmount = allOrderData[0].payment.total;
+        const userId = allOrderData[0].userId;
 
-            if (Math.abs(amountPaid - expectedAmount) > 2) { // 2 unit buffer for currency conversion rounding
-                const fraudMsg = `FRAUD: Group ${groupId} paid ${amountPaid} but expected ${expectedAmount}`;
-                console.error(`🚨 ${fraudMsg}`);
+        if (Math.abs(amountPaid - expectedAmount) > 2) { // 2 unit buffer for currency conversion rounding
+          const fraudMsg = `FRAUD: Group ${groupId} paid ${amountPaid} but expected ${expectedAmount}`;
+          console.error(`🚨 ${fraudMsg}`);
 
-                const fraudBatch = db.batch();
-                ordersToUpdate.forEach(docSnap => {
-                    fraudBatch.update(docSnap.ref, {
-                        status: 'fraud_alert',
-                        fraudReason: fraudMsg,
-                        'payment.status': 'fraud_flagged'
-                    });
-                });
-
-                if (userId && userId !== 'guest') {
-                    fraudBatch.update(db.collection('users').doc(userId), {
-                        isBanned: true,
-                        banReason: "Payment Tampering / Fraud Attempt",
-                        bannedAt: admin.firestore.FieldValue.serverTimestamp()
-                    });
-                }
-                await fraudBatch.commit();
-                return res.status(200).send("Fraud Detected");
-            }
-
-            // 5. ✅ SUCCESS: Batch Update
-            const batch = db.batch();
-            ordersToUpdate.forEach((docSnap) => {
-                if (docSnap.data().status !== 'placed') {
-                    batch.update(docSnap.ref, {
-                        status: 'placed',
-                        'payment.status': 'paid',
-                        'payment.transactionId': paymentIntent.id,
-                        providerStatus: 'pending', // 🟢 Wakes up your processNewOrder bot!
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                    });
-                }
+          const fraudBatch = db.batch();
+          ordersToUpdate.forEach(docSnap => {
+            fraudBatch.update(docSnap.ref, {
+              status: 'fraud_alert',
+              fraudReason: fraudMsg,
+              'payment.status': 'fraud_flagged'
             });
-            await batch.commit();
-            console.log(`✅ Stripe Group Order ${groupId} successfully paid.`);
+          });
 
-            // 6. 🧾 GENERATE INVOICE
-            await generateAndSendConsolidatedInvoice(allOrderData);
+          if (userId && userId !== 'guest') {
+            fraudBatch.update(db.collection('users').doc(userId), {
+              isBanned: true,
+              banReason: "Payment Tampering / Fraud Attempt",
+              bannedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+          await fraudBatch.commit();
+          return res.status(200).send("Fraud Detected");
         }
 
-        // Lock Event
-        await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp(), type: event.type });
-        res.status(200).json({ received: true });
+        if (userId && userId !== 'guest') {
+          try {
+            const launchRef = db.collection('app_settings').doc('launch_status');
+            const userRef = db.collection('users').doc(userId);
+
+            await db.runTransaction(async (t) => {
+              const userDoc = await t.get(userRef);
+              const launchDoc = await t.get(launchRef);
+
+              if (userDoc.exists && launchDoc.exists) {
+                const userData = userDoc.data();
+                const launchData = launchDoc.data();
+
+                if (!userData.isFoundingCreator && launchData.claimed_slots < launchData.total_slots) {
+                  t.update(launchRef, {
+                    claimed_slots: admin.firestore.FieldValue.increment(1)
+                  });
+                  t.update(userRef, {
+                    isFoundingCreator: true
+                  });
+                  console.log(`🎉 User ${userId} claimed Founding Creator slot ${launchData.claimed_slots + 1}!`);
+                }
+              }
+            });
+          } catch (err) {
+            console.error("❌ Founding Creator Transaction Error:", err);
+          }
+        }
+
+        const batch = db.batch();
+        const orderData = allOrderData[0];
+        if (orderData.referralDiscountApplied) {
+          batch.update(db.collection('users').doc(userId), {
+            hasActiveReward: false,
+            referralCount: 0
+          });
+        }
+
+        // 2. Increment Referrer's Count (If this is buyer's first purchase)
+        if (userId && userId !== 'guest') {
+          const userDoc = await db.collection('users').doc(userId).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data();
+            if (userData.referredBy && !userData.hasMadeFirstPurchase) {
+              // Mark buyer as converted
+              batch.update(db.collection('users').doc(userId), { hasMadeFirstPurchase: true });
+
+              // Find the friend who invited them
+              const referrerRef = db.collection('users').doc(userData.referredBy);
+              const referrerDoc = await referrerRef.get();
+
+              if (referrerDoc.exists) {
+                const refData = referrerDoc.data();
+
+                // Only increment if they aren't currently locked
+                if (!refData.hasActiveReward) {
+                  const newCount = (refData.referralCount || 0) + 1;
+
+                  if (newCount >= 3) {
+                    // Trigger the lock and reward!
+                    batch.update(referrerRef, { referralCount: 3, hasActiveReward: true });
+                  } else {
+                    // Just increment progress
+                    batch.update(referrerRef, { referralCount: newCount });
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // 5. ✅ SUCCESS: Batch Update
+        ordersToUpdate.forEach((docSnap) => {
+          if (docSnap.data().status !== 'placed') {
+            batch.update(docSnap.ref, {
+              status: 'placed',
+              'payment.status': 'paid',
+              'payment.transactionId': paymentIntent.id,
+              providerStatus: 'pending', // 🟢 Wakes up your processNewOrder bot!
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+        });
+        await batch.commit();
+        console.log(`✅ Stripe Group Order ${groupId} successfully paid.`);
+
+        // 6. 🧾 GENERATE INVOICE
+        await generateAndSendConsolidatedInvoice(allOrderData);
+      }
+
+      // Lock Event
+      await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp(), type: event.type });
+      res.status(200).json({ received: true });
 
     } catch (error) {
-        console.error("Stripe Processing Error:", error);
-        res.status(500).send("Internal Server Error");
+      console.error("Stripe Processing Error:", error);
+      res.status(500).send("Internal Server Error");
     }
-});
+  });
 
 exports.sendConsolidatedInvoice = functions
   .runWith({ memory: '1GB', timeoutSeconds: 120 })

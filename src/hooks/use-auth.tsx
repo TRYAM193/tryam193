@@ -1,8 +1,8 @@
 import { useContext, createContext, useEffect, useState, ReactNode } from "react";
-import { 
-  User, 
-  onAuthStateChanged, 
-  signInAnonymously, 
+import {
+  User,
+  onAuthStateChanged,
+  signInAnonymously,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
@@ -10,8 +10,9 @@ import {
   signInWithPopup,
   sendPasswordResetEmail
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore"; // 👈 Added Firestore imports
+import { doc, collection, where, query, getDocs, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore"; // 👈 Added Firestore imports
 import { auth, db } from "@/firebase"; // 👈 Ensure db is imported
+
 
 interface UserProfile {
   name?: string;
@@ -21,6 +22,11 @@ interface UserProfile {
   banReason?: string;
   photoURL?: string;
   phoneVerified?: boolean;
+  isFoundingCreator?: boolean;
+  referralCode: string;
+  referralCount: number,                     
+  hasActiveReward: boolean,               
+  referredBy: string | null;
 }
 
 interface AuthContextType {
@@ -45,58 +51,94 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      
+
       if (currentUser) {
         // Fetch Profile from Firestore
         try {
-            const docRef = doc(db, "users", currentUser.uid);
-            const docSnap = await getDoc(docRef);
-            
-            if (docSnap.exists()) {
-                setUserProfile(docSnap.data() as UserProfile);
-            } else {
-                // Should handle missing profile, but for now just set null
-                setUserProfile(null);
-            }
+          const docRef = doc(db, "users", currentUser.uid);
+          const docSnap = await getDoc(docRef);
+
+          if (docSnap.exists()) {
+            setUserProfile(docSnap.data() as UserProfile);
+          } else {
+            // Should handle missing profile, but for now just set null
+            setUserProfile(null);
+          }
         } catch (e) {
-            console.log("Error fetching user profile:", e);
+          console.log("Error fetching user profile:", e);
         }
       } else {
         setUserProfile(null);
       }
-      
+
       setIsLoading(false);
     });
     return () => unsubscribe();
   }, []);
+
+  // Utility to generate a unique 6-character code (e.g., TRYAM-8X9A2B)
+  const generateReferralCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = 'TRYAM-';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
 
   // 🛠️ HELPER: Save/Update User in Firestore
   const saveUserToDb = async (user: User, additionalData: any = {}) => {
     const userRef = doc(db, "users", user.uid);
     const userSnap = await getDoc(userRef);
 
+    let referredByUid = null;
+    const pendingRefCode = localStorage.getItem('tryam_pending_referral');
+
+    // 1. Check if the user clicked a referral link before signing up
+    if (pendingRefCode) {
+      try {
+        // Find the existing user who owns this referral code
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('referralCode', '==', pendingRefCode));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          // We found the referrer! Get their UID.
+          const referrerDoc = querySnapshot.docs[0];
+          referredByUid = referrerDoc.id;
+        }
+      } catch (error) {
+        console.error('Error verifying referral code:', error);
+      }
+    }
+
     if (!userSnap.exists()) {
-        // 🟢 NEW USER: Initialize Default Values (isBanned: false)
-        await setDoc(userRef, {
-            uid: user.uid,
-            email: user.email,
-            name: user.displayName || additionalData.name || "User",
-            photoURL: user.photoURL || null,
-            role: "user",
-            isBanned: false, // 👈 IMPORTANT: Set default to false
-            banReason: null,
-            phoneVerified: false,
-            createdAt: serverTimestamp(),
-            lastLogin: serverTimestamp(),
-            ...additionalData
-        });
+      // 🟢 NEW USER: Initialize Default Values (isBanned: false)
+      await setDoc(userRef, {
+        uid: user.uid,
+        email: user.email,
+        name: user.displayName || additionalData.name || "User",
+        photoURL: user.photoURL || null,
+        role: "user",
+        isBanned: false, // 👈 IMPORTANT: Set default to false
+        banReason: null,
+        phoneVerified: false,
+        isFoundingCreator: false,
+        referralCode: generateReferralCode(), // Their own code to share
+        referralCount: 0,                     // Starts at 0
+        hasActiveReward: false,               // ₹100 reward lock
+        referredBy: referredByUid,
+        createdAt: serverTimestamp(),
+        lastLogin: serverTimestamp(),
+        ...additionalData
+      });
     } else {
-        // 🟡 EXISTING USER: Only update Last Login (Do NOT overwrite isBanned)
-        await updateDoc(userRef, {
-            lastLogin: serverTimestamp(),
-            // We might update name/photo if they changed in Google, but be careful not to reset flags
-            email: user.email 
-        });
+      // 🟡 EXISTING USER: Only update Last Login (Do NOT overwrite isBanned)
+      await updateDoc(userRef, {
+        lastLogin: serverTimestamp(),
+        // We might update name/photo if they changed in Google, but be careful not to reset flags
+        email: user.email
+      });
     }
   };
 
@@ -107,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await signInAnonymously(auth);
       currentUser = result.user;
       await saveUserToDb(currentUser, { name: "Guest", role: "guest" });
-    } 
+    }
     else if (type === "google") {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
@@ -142,15 +184,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      isAuthenticated: !!user, 
-      isLoading, 
+    <AuthContext.Provider value={{
+      isAuthenticated: !!user,
+      isLoading,
       loading: isLoading,
-      user, 
+      user,
       userProfile, // 👈 Exported for ProtectedRoute
-      signIn, 
-      signOut, 
-      resetPassword 
+      signIn,
+      signOut,
+      resetPassword
     }}>
       {children}
     </AuthContext.Provider>

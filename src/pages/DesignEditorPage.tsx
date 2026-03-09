@@ -10,7 +10,7 @@ export default function DesignEditorPage() {
   return (
     <Provider store={store}>
       <div className="w-full h-screen bg-background overflow-hidden">
-          <FontLoader />
+          <FontLoader children={undefined} />
 
         <Routes>
           <Route path="/*" element={<EditorPanel />} />

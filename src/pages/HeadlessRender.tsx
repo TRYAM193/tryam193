@@ -59,8 +59,8 @@ export default function HeadlessRender() {
                 if (item.productId) {
                     const product = INITIAL_PRODUCTS.find(p => p.id === item.productId);
                     if (product && product.canvas_size) {
-                        originalWidth = product.canvas_size.width;
-                        originalHeight = product.canvas_size.height;
+                        originalWidth = product.canvas_size.width || originalWidth;
+                        originalHeight = product.canvas_size.height || originalHeight;
                     }
                 }
 
@@ -87,8 +87,7 @@ export default function HeadlessRender() {
                     await document.fonts.ready;
 
                     canvas.setZoom(scaleFactor);
-                    canvas.setWidth(TARGET_WIDTH);
-                    canvas.setHeight(TARGET_HEIGHT);
+                    canvas.setDimensions({ width: TARGET_WIDTH, height: TARGET_HEIGHT });
                     
                     canvas.renderAll();
 

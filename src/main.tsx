@@ -77,7 +77,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/store" element={<Storefront />} />
             <Route path="/product/:productId" element={<ProductDetails />} /> {/* ✅ ADDED THIS */}
             <Route path="/terms" element={<TermsConditions />} />
-            <Route path="/design-fresh" element={<DesignEditorPage />} />
+            <Route path="/design" element={<DesignEditorPage />} />
 
             <Route element={<ProtectedRoute />}>
               {/* Store Routes */}

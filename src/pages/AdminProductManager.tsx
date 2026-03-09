@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, CheckCircle, Upload, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import {seedProducts} from '../../scripts/seed-products'
+import {seedProducts} from '../lib/seed-products'
 
 export default function AdminProductManager() {
   const [products, setProducts] = useState<any[]>([]);

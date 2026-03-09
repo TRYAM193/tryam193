@@ -41,10 +41,10 @@ export function adaptVariantForRegion(
   // Logic for India Region (Qikink priority)
   if (region === "IN" && variants.qikink?.active) {
     return {
-      id: variant.id,
+      id: variants.id,
       // Use Qikink price/inventory if available, otherwise fallback to base
-      price: variant.qikink.price ?? variant.price,
-      inventory: variant.qikink.inventory ?? variant.inventory,
+      price: variants.qikink.price ?? variants.price,
+      inventory: variants.qikink.inventory ?? variants.inventory,
       source: "qikink",
     };
   }
@@ -55,8 +55,8 @@ export function adaptVariantForRegion(
   // Default fallback (Standard DB fields)
   return {
     id: variants.id,
-    price: variant.price,
-    inventory: variant.inventory,
+    price: variants.price,
+    inventory: variants.inventory,
     source: "default",
   };
 }

@@ -1255,7 +1255,7 @@ export default function EditorPanel() {
                     isGeneratingPreview={isGeneratingPreview}
                     updateObject={updateObject}
                     currentDesignName={currentDesign?.name || "Untitled Design"}
-                    storageFolder={`users/${user.uid}/designs/${editingDesignId}/images`}
+                    storageFolder={`users/${user?.uid}/designs/${editingDesignId}/images`}
 
                     // --- 3. Pass View Switcher Props ---
                     currentView={currentView}

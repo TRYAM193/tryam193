@@ -20,7 +20,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Mail, Lock, User as UserIcon, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import { toast } from "sonner"; // ✅ Import Toast for success message
 
 // Custom Google Icon
@@ -40,6 +40,12 @@ interface AuthProps {
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const { isLoading: authLoading, isAuthenticated, signIn, resetPassword } = useAuth(); // ✅ Get resetPassword
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const fromPath = location.state?.from?.pathname || "/dashboard";
+  const fromSearch = location.state?.from?.search || "";
+  const destination = `${fromPath}${fromSearch}`;
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +71,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     setError(null);
     try {
       await signIn("google");
+      navigate(destination, { replace: true });
     } catch (err: any) {
       console.error("Google Auth Error:", err);
       setError("Failed to sign in with Google.");
@@ -91,6 +98,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       formData.append("isSignUp", isSignUp ? "true" : "false");
       
       await signIn("email-password", formData);
+      navigate(destination, { replace: true });
     } catch (err: any) {
       console.error("Auth error:", err);
       let msg = "Authentication failed.";

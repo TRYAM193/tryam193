@@ -38,8 +38,6 @@ export default function FontLoader({ children }: { children: ReactNode }) {
 
       await Promise.all(fontPromises);
       setFontsLoaded(true);
-
-      console.log("🔤 All fonts loaded");
     };
 
     loadFonts();

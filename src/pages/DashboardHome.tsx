@@ -222,7 +222,7 @@ export default function DashboardHome() {
           >
             <span>
               {t("dashboard.welcome")},  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-orange-400">
-                {user?.displayName?.split(" ")[0] || "Creator"}
+                {(user?.displayName?.split(" ")[0]?.charAt(0).toUpperCase() || "") + (user?.displayName?.split(" ")[0]?.slice(1) || "") || "Creator"}
               </span>
             </span>
 

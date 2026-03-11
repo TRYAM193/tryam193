@@ -37,6 +37,7 @@ import DashboardHelp from "./pages/DashboardHelp";
 import AdminRoute from "./components/AdminRoute";
 import BannedPage from "./pages/BannedPage.tsx";
 import ProtectedRoute from "./components/ProtectedRoute.tsx";
+import TemplatesPage from "./pages/TemplatesPage.tsx";
 
 function RouteSyncer() {
   const location = useLocation();
@@ -78,6 +79,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/product/:productId" element={<ProductDetails />} /> {/* ✅ ADDED THIS */}
             <Route path="/terms" element={<TermsConditions />} />
             <Route path="/design" element={<DesignEditorPage />} />
+            <Route path="/designs" element={<TemplatesPage />} />
 
             <Route element={<ProtectedRoute />}>
               {/* Store Routes */}

@@ -31,7 +31,6 @@ import SaveTemplateButton from '../components/SaveTemplateButton';
 import { v4 as uuidv4 } from 'uuid';
 import { uploadToStorage } from '../utils/saveDesign'
 import { PriceDisplay } from '@/components/PriceDisplay';
-import { Canvas } from 'fabric';
 
 function removeUndefined(obj) {
     if (Array.isArray(obj)) {
@@ -1005,7 +1004,7 @@ export default function EditorPanel() {
                         urlSize={urlSize || currentDesign?.productConfig?.variantSize}
                         dpiIssues={dpiIssuesList}
                         isAdmin={isAdmin}
-                        storageFolder={`users/${user.uid}/designs/${editingDesignId}/images`}
+                        storageFolder={`users/${user?.uid}/designs/${editingDesignId}/images` || 'Anononymus'}
                     />
 
                     {/* Conditional Check */}

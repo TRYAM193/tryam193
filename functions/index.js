@@ -403,7 +403,7 @@ async function sendInvoiceEmail(email, pdfUrl, isConsolidated, orderId, isIndia,
   try {
     // ⚠️ REMEMBER: Use 'onboarding@resend.dev' if testing, 'support@tryam193.com' if live.
     await resend.emails.send({
-      from: 'TRYAM Support <onboarding@resend.dev>',
+      from: 'TRYAM Support <support@tryam193.in>',
       to: email,
       subject: subject,
       html: htmlBody,
@@ -445,8 +445,7 @@ async function sendCODConfirmation(orderData) {
       Amount to Pay on Delivery
     </p>
     <h3 style="margin: 6px 0 0 0; color: #111;">
-      ₹${orderData.price * orderData.quantity}
-    </h3>
+      ₹${orderData.price * orderData.quantity - (orderData.referralDiscountApplied ? 100 : 0)}
   </div>
 
   <p style="font-size: 14px; color: #555; line-height: 1.6;">
@@ -484,7 +483,7 @@ async function sendCODConfirmation(orderData) {
 
   try {
     await resend.emails.send({
-      from: 'TRYAM Orders <onboarding@resend.dev>',
+      from: 'TRYAM Support <support@tryam193.in>',
       to: email,
       subject: `Order #${orderId} Confirmed (COD)`,
       html: htmlBody
@@ -1666,7 +1665,7 @@ exports.processNewOrder = functions
       await change.after.ref.update({ providerStatus: 'error', botError: error.message });
 
       await resend.emails.send({
-        from: 'System Alert <onboarding@resend.dev>',
+        from: 'System Alert <support@tryam193.in>',
         to: ['tryam193@gmail.com', 'shreyaskumarswamy2007@gmail.com', 'cchiranjeevi.r789@gmail.com'],
         subject: `🚨 Bot Failed: Order #${orderId}`,
         html: `<p>The fulfillment bot crashed for order <b>${orderId}</b>.</p><p>Error: ${error.message}</p><p><a href="https://yourwebsite.com/admin/orders">Click here to open the Command Center and Retry.</a></p>`
@@ -2206,8 +2205,8 @@ exports.onTicketReply = functions.firestore
 
     try {
       await resend.emails.send({
-        from: 'TRYAM Support <onboarding@resend.dev>', // Use 'onboarding@resend.dev' for testing
-        to: 'tryam193@gmail.com',
+        from: 'TRYAM Support <support@tryam193.in>', // Use 'onboarding@resend.dev' for testing
+        to: userEmail,
         subject: `Update on Ticket #${newData.orderNumber}`,
         html: htmlBody
       });
@@ -2366,8 +2365,8 @@ exports.sendContactEmail = functions.https.onCall(async (data, context) => {
 
   try {
     await resend.emails.send({
-      from: 'TRYAM Contact Form <onboarding@resend.dev>', // Change to support@tryam193.com once domain is verified
-      to: 'support@tryam193.com', // 👈 This is YOUR inbox where you receive the messages
+      from: 'TRYAM Support <support@tryam193.in>', // Change to support@tryam193.com once domain is verified
+      to: 'admin@tryam193.in', // 👈 This is YOUR inbox where you receive the messages
       reply_to: email,            // 👈 Allows you to hit "Reply" directly to the user
       subject: `Contact Form: ${subject || 'General Inquiry'}`,
       html: htmlBody

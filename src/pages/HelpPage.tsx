@@ -214,9 +214,6 @@ export default function HelpPage() {
                             Contact Support
                         </Button>
                     </Link>
-                    <Button size="lg" variant="outline" className="rounded-full border-white/10 text-white hover:bg-white/10 h-12 px-8">
-                        <MessageCircle className="mr-2 h-5 w-5" /> Live Chat
-                    </Button>
                 </div>
             </div>
         </div>

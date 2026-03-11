@@ -78,12 +78,11 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/store" element={<Storefront />} />
             <Route path="/product/:productId" element={<ProductDetails />} /> {/* ✅ ADDED THIS */}
             <Route path="/terms" element={<TermsConditions />} />
-            <Route path="/design" element={<DesignEditorPage />} />
             <Route path="/designs" element={<TemplatesPage />} />
+            <Route path="/design/*" element={<DesignEditorPage />} />
 
             <Route element={<ProtectedRoute />}>
               {/* Store Routes */}
-              <Route path="/design/*" element={<DesignEditorPage />} />
               <Route path="orders/:orderId" element={<OrderDetailsPage />} />
 
               {/* Dashboard Routes */}

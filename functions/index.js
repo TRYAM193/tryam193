@@ -1182,53 +1182,55 @@ exports.handleProviderWebhook = functions.https.onRequest(async (req, res) => {
 // ------------------------------------------------------------------
 // 🔄 5. REFRESH STATUS (For Qikink / Backup)
 // ------------------------------------------------------------------
-exports.refreshOrderStatus = functions.https.onCall(async (data, context) => {
-  const { orderId } = data;
-  if (!orderId) throw new functions.https.HttpsError('invalid-argument', 'Missing orderId');
+exports.refreshOrderStatus = functions
+  .runWith({ secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
+  .https.onCall(async (data, context) => {
+    const { orderId } = data;
+    if (!orderId) throw new functions.https.HttpsError('invalid-argument', 'Missing orderId');
 
-  const orderRef = db.collection('orders').doc(orderId);
-  const doc = await orderRef.get();
-  if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Order not found');
+    const orderRef = db.collection('orders').doc(orderId);
+    const doc = await orderRef.get();
+    if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Order not found');
 
-  const order = doc.data();
+    const order = doc.data();
 
-  // LOGIC FOR QIKINK REFRESH
-  if (order.provider === 'qikink') {
-    const token = await getQikinkAccessToken();
-    const clientId = config.value().qikink?.client_id;
+    // LOGIC FOR QIKINK REFRESH
+    if (order.provider === 'qikink') {
+      const token = await getQikinkAccessToken();
+      const clientId = config.value().qikink?.client_id;
 
-    try {
-      // NOTE: Using the generic Qikink "Get Order Status" call (adjust endpoint if needed)
-      const res = await axios.get(`${QIKINK_BASE_URL}/api/order/status?order_number=${order.providerOrderId}`, {
-        headers: { 'ClientId': clientId, 'Accesstoken': token }
-      });
-
-      // Map Qikink Status to Our Status
-      const qStatus = res.data.status?.toLowerCase(); // e.g. "shipped", "dispatched"
-      let newStatus = order.status;
-      let trackingUrl = order.providerData?.trackingUrl;
-
-      if (qStatus.includes('ship') || qStatus.includes('dispatch')) {
-        newStatus = 'shipped';
-        trackingUrl = res.data.tracking_link || trackingUrl;
-      } else if (qStatus.includes('deliver')) {
-        newStatus = 'delivered';
-      }
-
-      if (newStatus !== order.status) {
-        await orderRef.update({
-          status: newStatus,
-          'providerData.trackingUrl': trackingUrl
+      try {
+        // NOTE: Using the generic Qikink "Get Order Status" call (adjust endpoint if needed)
+        const res = await axios.get(`${QIKINK_BASE_URL}/api/order/status?order_number=${order.providerOrderId}`, {
+          headers: { 'ClientId': clientId, 'Accesstoken': token }
         });
-        return { success: true, updated: true, newStatus };
-      }
-    } catch (e) {
-      console.error("Qikink Refresh Failed:", e);
-    }
-  }
 
-  return { success: true, updated: false };
-});
+        // Map Qikink Status to Our Status
+        const qStatus = res.data.status?.toLowerCase(); // e.g. "shipped", "dispatched"
+        let newStatus = order.status;
+        let trackingUrl = order.providerData?.trackingUrl;
+
+        if (qStatus.includes('ship') || qStatus.includes('dispatch')) {
+          newStatus = 'shipped';
+          trackingUrl = res.data.tracking_link || trackingUrl;
+        } else if (qStatus.includes('deliver')) {
+          newStatus = 'delivered';
+        }
+
+        if (newStatus !== order.status) {
+          await orderRef.update({
+            status: newStatus,
+            'providerData.trackingUrl': trackingUrl
+          });
+          return { success: true, updated: true, newStatus };
+        }
+      } catch (e) {
+        console.error("Qikink Refresh Failed:", e);
+      }
+    }
+
+    return { success: true, updated: false };
+  });
 
 
 // ------------------------------------------------------------------
@@ -1551,7 +1553,7 @@ async function renderDesignServerSide(designJson, productId, view = 'front') {
 }
 
 exports.processNewOrder = functions
-  .runWith({ timeoutSeconds: 300, memory: '4GB' })
+  .runWith({ timeoutSeconds: 300, memory: '4GB', secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
   .firestore.document('orders/{orderId}')
   .onUpdate(async (change, context) => {
     const newData = change.after.data();
@@ -1664,15 +1666,44 @@ exports.processNewOrder = functions
   });
 
 // Keep your standard exports...
-exports.createRazorpayOrder = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Login required');
-  const razorpay = new Razorpay({
-    key_id: config.value().razorpay?.key_id || "MISSING_ID",
-    key_secret: config.value().razorpay?.key_secret || "MISSING_SECRET"
+exports.createRazorpayOrder = functions
+  .runWith({ secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Login required');
+    const razorpay = new Razorpay({
+      key_id: config.value().razorpay?.key_id || "MISSING_ID",
+      key_secret: config.value().razorpay?.key_secret || "MISSING_SECRET"
+    });
+
+    try {
+      let finalAmount = data.amount;
+
+      // 🛡️ SECURITY: Verify discount eligibility in DB
+      if (data.applyReferralReward) {
+        const userDoc = await db.collection('users').doc(context.auth.uid).get();
+        if (userDoc.exists && userDoc.data().hasActiveReward) {
+          finalAmount = Math.max(0, finalAmount - 100);
+        }
+      }
+
+      const order = await razorpay.orders.create({
+        amount: Math.round(finalAmount * 100),
+        currency: data.currency || "INR",
+        payment_capture: 1,
+        notes: {
+          groupId: data.groupId // 👈 Attach it to Razorpay's notes!
+        }
+      });
+
+      return { orderId: order.id, amount: order.amount, currency: order.currency, keyId: config.value().razorpay.key_id };
+    } catch (error) { throw new functions.https.HttpsError('internal', error.message); }
   });
 
-  try {
+exports.createStripeIntent = functions
+  .runWith({ secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
+  .https.onCall(async (data, context) => {
     let finalAmount = data.amount;
+    const stripe = new Stripe(config.value().stripe?.secret_key || "MISSING_KEY");
 
     // 🛡️ SECURITY: Verify discount eligibility in DB
     if (data.applyReferralReward) {
@@ -1682,69 +1713,46 @@ exports.createRazorpayOrder = functions.https.onCall(async (data, context) => {
       }
     }
 
-    const order = await razorpay.orders.create({
+    const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(finalAmount * 100),
-      currency: data.currency || "INR",
-      payment_capture: 1,
-      notes: {
-        groupId: data.groupId // 👈 Attach it to Razorpay's notes!
-      }
+      currency: data.currency,
+      metadata: { groupId: data.groupId }
+    });
+    return { clientSecret: paymentIntent.client_secret };
+  });
+
+exports.generateAiImage = functions
+  .runWith({ secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
+  .https.onCall(async (data, context) => {
+    const { prompt, style } = data;
+    const userId = context.auth.uid;
+    const today = new Date().toISOString().split('T')[0];
+    const docRef = db.collection('users').doc(userId).collection('daily_stats').doc(today);
+    const MAX_GEN = 5; // 💎 Visible Limit
+    const replicate = new Replicate({
+      auth: config.value().replicate?.key || "MISSING_KEY",
     });
 
-    return { orderId: order.id, amount: order.amount, currency: order.currency, keyId: config.value().razorpay.key_id };
-  } catch (error) { throw new functions.https.HttpsError('internal', error.message); }
-});
+    await db.runTransaction(async (t) => {
+      const doc = await t.get(docRef);
+      const current = doc.exists ? (doc.data().gen_count || 0) : 0;
 
-exports.createStripeIntent = functions.https.onCall(async (data, context) => {
-  let finalAmount = data.amount;
-  const stripe = new Stripe(config.value().stripe?.secret_key || "MISSING_KEY");
+      if (current >= MAX_GEN) {
+        throw new functions.https.HttpsError('resource-exhausted', `You have used your ${MAX_GEN} free generations for today.`);
+      }
 
-  // 🛡️ SECURITY: Verify discount eligibility in DB
-  if (data.applyReferralReward) {
-    const userDoc = await db.collection('users').doc(context.auth.uid).get();
-    if (userDoc.exists && userDoc.data().hasActiveReward) {
-      finalAmount = Math.max(0, finalAmount - 100);
-    }
-  }
-
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: Math.round(finalAmount * 100),
-    currency: data.currency,
-    metadata: { groupId: data.groupId }
+      t.set(docRef, {
+        gen_count: current + 1,
+        last_updated: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+    try {
+      const output = await replicate.run("black-forest-labs/flux-schnell", { input: { prompt: style ? `${prompt}, ${style} style` : prompt, output_format: "png" } });
+      const imageResponse = await axios.get(output[0], { responseType: 'arraybuffer' });
+      const base64Image = Buffer.from(imageResponse.data, 'binary').toString('base64');
+      return { success: true, image: `data:image/png;base64,${base64Image}` };
+    } catch (error) { throw new functions.https.HttpsError('internal', 'Image generation failed'); }
   });
-  return { clientSecret: paymentIntent.client_secret };
-});
-
-exports.generateAiImage = functions.https.onCall(async (data, context) => {
-  const { prompt, style } = data;
-  const userId = context.auth.uid;
-  const today = new Date().toISOString().split('T')[0];
-  const docRef = db.collection('users').doc(userId).collection('daily_stats').doc(today);
-  const MAX_GEN = 5; // 💎 Visible Limit
-  const replicate = new Replicate({
-    auth: config.value().replicate?.key || "MISSING_KEY",
-  });
-
-  await db.runTransaction(async (t) => {
-    const doc = await t.get(docRef);
-    const current = doc.exists ? (doc.data().gen_count || 0) : 0;
-
-    if (current >= MAX_GEN) {
-      throw new functions.https.HttpsError('resource-exhausted', `You have used your ${MAX_GEN} free generations for today.`);
-    }
-
-    t.set(docRef, {
-      gen_count: current + 1,
-      last_updated: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  });
-  try {
-    const output = await replicate.run("black-forest-labs/flux-schnell", { input: { prompt: style ? `${prompt}, ${style} style` : prompt, output_format: "png" } });
-    const imageResponse = await axios.get(output[0], { responseType: 'arraybuffer' });
-    const base64Image = Buffer.from(imageResponse.data, 'binary').toString('base64');
-    return { success: true, image: `data:image/png;base64,${base64Image}` };
-  } catch (error) { throw new functions.https.HttpsError('internal', 'Image generation failed'); }
-});
 
 exports.saveTshirtDesign = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Login required.');
@@ -1768,7 +1776,7 @@ exports.saveTshirtDesign = functions.https.onCall(async (data, context) => {
 const crypto = require("crypto");
 
 exports.razorpayWebhook = functions
-  .runWith({ timeoutSeconds: 300, memory: '1GB' })
+  .runWith({ timeoutSeconds: 300, memory: '1GB', secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
   .https.onRequest(async (req, res) => {
     const signature = req.headers['x-razorpay-signature'];
     const eventId = req.headers['x-razorpay-event-id'];
@@ -1949,7 +1957,7 @@ exports.razorpayWebhook = functions
 // 💰 2. STRIPE WEBHOOK (Group Orders, Fraud Check, Invoice)
 // ------------------------------------------------------------------
 exports.stripeWebhook = functions
-  .runWith({ timeoutSeconds: 300, memory: '1GB' })
+  .runWith({ timeoutSeconds: 300, memory: '1GB', secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
   .https.onRequest(async (req, res) => {
     const signature = req.headers['stripe-signature'];
     const secret = config.value().stripe?.webhook_secret;
@@ -2113,7 +2121,7 @@ exports.stripeWebhook = functions
   });
 
 exports.sendConsolidatedInvoice = functions
-  .runWith({ memory: '1GB', timeoutSeconds: 120 })
+  .runWith({ memory: '1GB', timeoutSeconds: 120, secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
   .https.onCall(async (data, context) => {
     if (!data.orders || data.orders.length === 0) return;
     await generateAndSendConsolidatedInvoice(data.orders);
@@ -2217,7 +2225,7 @@ exports.onTicketReply = functions.firestore
   });
 
 // Check Qikink status bot
-exports.pollQikinkOrders = functions.runWith({ timeoutSeconds: 540, memory: '1GB' })
+exports.pollQikinkOrders = functions.runWith({ timeoutSeconds: 540, memory: '1GB', secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
   .pubsub.schedule('every 3 hours')
   .onRun(async (context) => {
     console.log("🤖 Qikink Polling Bot Started...");
@@ -2345,16 +2353,18 @@ exports.pollQikinkOrders = functions.runWith({ timeoutSeconds: 540, memory: '1GB
 // ------------------------------------------------------------------
 // 📧 CONTACT FORM EMAILS (Direct Call from Frontend)
 // ------------------------------------------------------------------
-exports.sendContactEmail = functions.https.onCall(async (data, context) => {
-  const { name, email, subject, message } = data;
-  const resend = new Resend(config.value().resend?.key);
+exports.sendContactEmail = functions
+  .runWith({ secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
+  .https.onCall(async (data, context) => {
+    const { name, email, subject, message } = data;
+    const resend = new Resend(config.value().resend?.key);
 
-  // 1. Basic Validation
-  if (!name || !email || !message) {
-    throw new functions.https.HttpsError('invalid-argument', 'Missing required fields');
-  }
+    // 1. Basic Validation
+    if (!name || !email || !message) {
+      throw new functions.https.HttpsError('invalid-argument', 'Missing required fields');
+    }
 
-  const htmlBody = `
+    const htmlBody = `
       <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
         <h2 style="color: #ea580c;">New Contact Request</h2>
         <p><strong>From:</strong> ${name} (${email})</p>
@@ -2364,18 +2374,18 @@ exports.sendContactEmail = functions.https.onCall(async (data, context) => {
       </div>
     `;
 
-  try {
-    await resend.emails.send({
-      from: 'TRYAM Support <support@tryam193.in>', // Change to support@tryam193.com once domain is verified
-      to: 'admin@tryam193.in', // 👈 This is YOUR inbox where you receive the messages
-      reply_to: email,            // 👈 Allows you to hit "Reply" directly to the user
-      subject: `Contact Form: ${subject || 'General Inquiry'}`,
-      html: htmlBody
-    });
+    try {
+      await resend.emails.send({
+        from: 'TRYAM Support <support@tryam193.in>', // Change to support@tryam193.com once domain is verified
+        to: 'admin@tryam193.in', // 👈 This is YOUR inbox where you receive the messages
+        reply_to: email,            // 👈 Allows you to hit "Reply" directly to the user
+        subject: `Contact Form: ${subject || 'General Inquiry'}`,
+        html: htmlBody
+      });
 
-    return { success: true, message: "Email sent successfully" };
-  } catch (error) {
-    console.error("❌ Contact Email Failed:", error);
-    throw new functions.https.HttpsError('internal', 'Failed to send email');
-  }
-});
+      return { success: true, message: "Email sent successfully" };
+    } catch (error) {
+      console.error("❌ Contact Email Failed:", error);
+      throw new functions.https.HttpsError('internal', 'Failed to send email');
+    }
+  });

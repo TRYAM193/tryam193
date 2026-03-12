@@ -91,7 +91,7 @@ const ScrubbableInput = ({ label, value, min, max, step = 1, onChange, onCommit,
           min={min}
           max={max}
           className="w-full bg-transparent text-xs font-medium text-white px-2 py-1.5 focus:outline-none text-right relative z-10"
-          value={parseInt(value) || ''}
+          value={parseInt(value) || '0'}
           onChange={(e) => onChange(parseFloat(e.target.value))}
           onBlur={(e) => onCommit(parseFloat(e.target.value))}
           onKeyDown={(e) => e.key === 'Enter' && onCommit(parseFloat(e.currentTarget.value))}

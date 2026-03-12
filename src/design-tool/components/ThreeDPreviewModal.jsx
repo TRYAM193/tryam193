@@ -16,7 +16,12 @@ export function ThreeDPreviewModal({
     selectedColor
 }) {
     const has3D = !!productData.model3d;
+    
+    // Fallback to empty objects if data is missing
     const mockups = productData.mockups || {};
+    const shadows = productData.shadows || {}; // NEW: Separate shadow maps
+    const highlights = productData.highlights || {}; // NEW: Separate highlight maps
+    
     const mockupKeys = Object.keys(mockups);
     
     // ✅ 1. DETECT MUG
@@ -33,7 +38,7 @@ export function ThreeDPreviewModal({
         height: 50 
     });
 
-    // Detect Pure Black
+    // Detect Pure Black for slight highlight adjustments
     const isPureBlack = selectedColor?.toLowerCase() === '#000000' || selectedColor?.toLowerCase() === '#000';
 
     useEffect(() => {
@@ -127,10 +132,9 @@ export function ThreeDPreviewModal({
                                 <div className="flex-1 flex items-center justify-center bg-zinc-900 p-8 overflow-auto">
                                     
                                     {/* 🖼️ MOCKUP CONTAINER */}
-                                    {/* Background is Grey (zinc-200) to contrast with black shirt */}
                                     <div className="relative w-full max-w-[500px] aspect-[3/4] shadow-2xl rounded-lg overflow-hidden bg-zinc-200 flex-shrink-0 group">
                                         
-                                        {/* LAYER 1: Base Color (Masked to Shirt Shape) */}
+                                        {/* 🪄 LAYER 1: BASE COLOR (Z-0) */}
                                         <div 
                                             className="absolute inset-0 w-full h-full z-0 transition-colors duration-300"
                                             style={{ 
@@ -146,36 +150,18 @@ export function ThreeDPreviewModal({
                                             }}
                                         />
 
-                                        {/* LAYER 2: Mockup Image (Composite) */}
-                                        {mockups[activeSide] ? (
-                                            <>
-                                                {/* A. SHADOW LAYER (Multiply) */}
-                                                <img 
-                                                    src={mockups[activeSide]} 
-                                                    alt={`${activeSide} view`} 
-                                                    className="absolute inset-0 w-full h-full object-contain z-10"
-                                                    style={{ mixBlendMode: 'multiply' }} 
-                                                />
-                                                
-                                                {/* B. HIGHLIGHT LAYER (Screen) */}
-                                                <img 
-                                                    src={mockups[activeSide]} 
-                                                    alt={`${activeSide} highlights`} 
-                                                    className="absolute inset-0 w-full h-full object-contain z-10 pointer-events-none"
-                                                    style={{ 
-                                                        mixBlendMode: 'screen', 
-                                                        // 👇 FIX: Reduce opacity drastically for black (0.1), keep normal for others (0.3)
-                                                        opacity: isPureBlack ? 0.1 : 0.3 
-                                                    }} 
-                                                />
-                                            </>
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-zinc-300 relative z-20">
-                                                No Mockup Available
-                                            </div>
+                                        {/* 🌑 LAYER 2: SHADOWS (Z-10) */}
+                                        {/* Placed UNDER the design to give the shirt depth without darkening the ink */}
+                                        {(shadows[activeSide] || mockups[activeSide]) && (
+                                            <img 
+                                                src={shadows[activeSide] || mockups[activeSide]} 
+                                                alt={`${activeSide} shadows`} 
+                                                className="absolute inset-0 w-full h-full object-contain z-10 pointer-events-none"
+                                                style={{ mixBlendMode: 'multiply' }} 
+                                            />
                                         )}
 
-                                        {/* LAYER 3: MUG SHADOW (Only for mugs) */}
+                                        {/* ☕ LAYER 2.5: MUG SHADOW (Only for mugs) */}
                                         {isMug && (
                                             <div 
                                                 className="absolute inset-0 z-15 pointer-events-none"
@@ -186,7 +172,8 @@ export function ThreeDPreviewModal({
                                             />
                                         )}
 
-                                        {/* LAYER 4: USER DESIGN */}
+                                        {/* 🎨 LAYER 3: USER DESIGN (Z-20) */}
+                                        {/* NO mix-blend-mode: multiply! It sits cleanly on top of the dark shadows. */}
                                         {currentTexture && (
                                             <div 
                                                 className="absolute z-20 border border-transparent hover:border-white/50 transition-colors overflow-hidden"
@@ -195,7 +182,7 @@ export function ThreeDPreviewModal({
                                                     left: `${adjustments.left}%`,
                                                     width: `${adjustments.width}%`,
                                                     height: `${adjustments.height}%`,
-                                                    mixBlendMode: 'multiply' 
+                                                    // mixBlendMode removed to prevent the "trapped" dark look!
                                                 }}
                                             >
                                                 {isMug ? (
@@ -220,6 +207,28 @@ export function ThreeDPreviewModal({
                                                 )}
                                             </div>
                                         )}
+
+                                        {/* ✨ LAYER 4: HIGHLIGHTS (Z-30) */}
+                                        {/* Placed OVER the design to give it a realistic 3D gloss/wrinkle reflection */}
+                                        {(highlights[activeSide] || mockups[activeSide]) && (
+                                            <img 
+                                                src={highlights[activeSide] || mockups[activeSide]} 
+                                                alt={`${activeSide} highlights`} 
+                                                className="absolute inset-0 w-full h-full object-contain z-30 pointer-events-none"
+                                                style={{ 
+                                                    mixBlendMode: 'screen', 
+                                                    opacity: isPureBlack ? 0.2 : 0.6 
+                                                }} 
+                                            />
+                                        )}
+                                        
+                                        {/* Fallback text if completely missing data */}
+                                        {!mockups[activeSide] && !currentTexture && (
+                                            <div className="absolute inset-0 w-full h-full flex items-center justify-center text-zinc-500 z-50">
+                                                No Mockup Available
+                                            </div>
+                                        )}
+
                                     </div>
                                 </div>
 
@@ -246,17 +255,16 @@ export function ThreeDPreviewModal({
                                                 />
                                                 
                                                 <img 
-                                                    src={mockups[side]} 
+                                                    src={shadows[side] || mockups[side]} 
                                                     alt={side} 
                                                     className="absolute inset-0 w-full h-full object-cover" 
                                                     style={{ mixBlendMode: 'multiply' }}
                                                 />
                                                 <img 
-                                                    src={mockups[side]} 
+                                                    src={highlights[side] || mockups[side]} 
                                                     alt={side} 
                                                     className="absolute inset-0 w-full h-full object-cover" 
-                                                    // 👇 FIX: Same fix for thumbnails
-                                                    style={{ mixBlendMode: 'screen', opacity: isPureBlack ? 0.1 : 0.3 }}
+                                                    style={{ mixBlendMode: 'screen', opacity: isPureBlack ? 0.2 : 0.6 }}
                                                 />
                                             </button>
                                         ))}

@@ -1,4 +1,5 @@
 const functions = require("firebase-functions/v1");
+const { defineJsonSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const axios = require("axios");
 const Replicate = require("replicate");
@@ -14,25 +15,12 @@ const handlebars = require("handlebars");
 const chromium = require("@sparticuz/chromium");
 const puppeteer = require("puppeteer-core");
 const { Resend } = require('resend');
+const config = defineJsonSecret("FUNCTIONS_CONFIG_EXPORT");
 // Initialize Admin
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 const db = admin.firestore();
-
-// 2. Payment Keys
-const razorpay = new Razorpay({
-  key_id: functions.config().razorpay?.key_id || "MISSING_ID",
-  key_secret: functions.config().razorpay?.key_secret || "MISSING_SECRET"
-});
-const stripe = new Stripe(functions.config().stripe?.secret_key || "MISSING_KEY");
-
-// 3. Replicate (AI)
-const replicate = new Replicate({
-  auth: functions.config().replicate?.key || "MISSING_KEY",
-});
-
-const resend = new Resend(functions.config().resend.key);
 
 // ------------------------------------------------------------------
 // 📄 UTILS: Number to Words (Simple Implementation)
@@ -218,6 +206,7 @@ async function sendInvoiceEmail(email, pdfUrl, isConsolidated, orderId, isIndia,
   let subject = "";
   let htmlBody = "";
   let attachments = [];
+  const resend = new Resend(config.value().resend?.key);
 
   // CASE 1: FRIENDLY DELIVERY (Online Order - No PDF)
   // Used when: Payment was already done online, just saying "It's here!"
@@ -423,6 +412,7 @@ async function sendCODConfirmation(orderData) {
   const email = orderData.shippingAddress.email;
   const orderId = orderData.orderId || orderData.groupId;
   const customerName = orderData.shippingAddress.fullName.split(" ")[0];
+  const resend = new Resend(config.value().resend?.key);
 
   const htmlBody = `
       <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #eee; border-radius: 12px; background-color: #ffffff;">
@@ -499,7 +489,7 @@ async function sendCODConfirmation(orderData) {
 // 🧩 PRINTIFY HELPER FUNCTIONS
 // ------------------------------------------------------------------
 async function getPrintifyVariantId(blueprintId, providerId, sizeName, colorName) {
-  const API_TOKEN = functions.config().printify?.token;
+  const API_TOKEN = config.value().printify?.token;
   try {
     const res = await axios.get(`https://api.printify.com/v1/catalog/blueprints/${blueprintId}/print_providers/${providerId}/variants.json`, {
       headers: { 'Authorization': `Bearer ${API_TOKEN}` }
@@ -529,7 +519,7 @@ async function getPrintifyVariantId(blueprintId, providerId, sizeName, colorName
 }
 
 async function deletePrintifyProduct(shopId, productId) {
-  const token = functions.config().printify?.token;
+  const token = config.value().printify?.token;
   try {
     await axios.delete(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
       headers: { 'Authorization': `Bearer ${token}` }
@@ -645,8 +635,8 @@ async function uploadToFirebase(imageUrl, filePath) {
 // 🛠️ UPDATED GENERATOR: With Firebase Upload & Smart Filtering
 // ------------------------------------------------------------------
 async function getMockupsFromPrintify(item, printFiles, orderId) {
-  const shopId = functions.config().printify?.shop_id;
-  const token = functions.config().printify?.token;
+  const shopId = config.value().printify?.shop_id;
+  const token = config.value().printify?.token;
   const map = item.vendor_maps?.printify || { blueprint_id: 12, print_provider_id: 29 };
 
   // Detect Product Type for better filtering
@@ -783,7 +773,7 @@ async function getMockupsFromPrintify(item, printFiles, orderId) {
 }
 
 async function uploadPrintifyImage(imageUrl) {
-  const API_TOKEN = functions.config().printify?.token;
+  const API_TOKEN = config.value().printify?.token;
   const res = await axios.post(`https://api.printify.com/v1/uploads/images.json`, {
     "file_name": "ai_design.png", "url": imageUrl
   }, { headers: { 'Authorization': `Bearer ${API_TOKEN}` } });
@@ -791,7 +781,7 @@ async function uploadPrintifyImage(imageUrl) {
 }
 
 async function createPrintifyProduct(shopId, blueprintId, providerId, variantId, printFiles) {
-  const API_TOKEN = functions.config().printify?.token;
+  const API_TOKEN = config.value().printify?.token;
 
   const frontImageId = printFiles.front ? await uploadPrintifyImage(printFiles.front) : null;
   const backImageId = printFiles.back ? await uploadPrintifyImage(printFiles.back) : null;
@@ -819,8 +809,8 @@ async function createPrintifyProduct(shopId, blueprintId, providerId, variantId,
 // 🚀 1. SEND TO PRINTIFY (With Placeholder Date)
 // ------------------------------------------------------------------
 async function sendToPrintify(orderData, processedItems) {
-  const shopId = functions.config().printify?.shop_id;
-  const token = functions.config().printify?.token;
+  const shopId = config.value().printify?.shop_id;
+  const token = config.value().printify?.token;
 
   const line_items = [];
 
@@ -899,7 +889,7 @@ async function sendToPrintify(orderData, processedItems) {
 // 🚀 2. SEND TO GELATO (With Real Dates)
 // ------------------------------------------------------------------
 async function sendToGelato(orderData, processedItems) {
-  const apiKey = functions.config().gelato.key;
+  const apiKey = config.value().gelato.key;
   const countryCode = orderData.shippingAddress.countryCode;
 
   const gelatoItems = processedItems.map(item => {
@@ -972,8 +962,8 @@ async function sendToGelato(orderData, processedItems) {
 const QIKINK_BASE_URL = "https://sandbox.qikink.com";
 
 async function getQikinkAccessToken() {
-  const clientId = functions.config().qikink?.client_id;
-  const clientSecret = functions.config().qikink?.client_secret;
+  const clientId = config.value().qikink?.client_id;
+  const clientSecret = config.value().qikink?.client_secret;
 
   const params = new URLSearchParams();
   params.append('ClientId', clientId);
@@ -986,7 +976,7 @@ async function getQikinkAccessToken() {
 
 async function sendToQikink(orderData, processedItems) {
   const token = await getQikinkAccessToken();
-  const clientId = functions.config().qikink?.client_id;
+  const clientId = config.value().qikink?.client_id;
 
   const qikinkLineItems = [];
 
@@ -1205,7 +1195,7 @@ exports.refreshOrderStatus = functions.https.onCall(async (data, context) => {
   // LOGIC FOR QIKINK REFRESH
   if (order.provider === 'qikink') {
     const token = await getQikinkAccessToken();
-    const clientId = functions.config().qikink?.client_id;
+    const clientId = config.value().qikink?.client_id;
 
     try {
       // NOTE: Using the generic Qikink "Get Order Status" call (adjust endpoint if needed)
@@ -1663,7 +1653,7 @@ exports.processNewOrder = functions
     } catch (error) {
       console.error("❌ Bot Failed:", error);
       await change.after.ref.update({ providerStatus: 'error', botError: error.message });
-
+      const resend = new Resend(config.value().resend?.key);
       await resend.emails.send({
         from: 'System Alert <support@tryam193.in>',
         to: ['tryam193@gmail.com', 'shreyaskumarswamy2007@gmail.com', 'cchiranjeevi.r789@gmail.com'],
@@ -1676,6 +1666,11 @@ exports.processNewOrder = functions
 // Keep your standard exports...
 exports.createRazorpayOrder = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Login required');
+  const razorpay = new Razorpay({
+    key_id: config.value().razorpay?.key_id || "MISSING_ID",
+    key_secret: config.value().razorpay?.key_secret || "MISSING_SECRET"
+  });
+
   try {
     let finalAmount = data.amount;
 
@@ -1696,12 +1691,13 @@ exports.createRazorpayOrder = functions.https.onCall(async (data, context) => {
       }
     });
 
-    return { orderId: order.id, amount: order.amount, currency: order.currency, keyId: functions.config().razorpay.key_id };
+    return { orderId: order.id, amount: order.amount, currency: order.currency, keyId: config.value().razorpay.key_id };
   } catch (error) { throw new functions.https.HttpsError('internal', error.message); }
 });
 
 exports.createStripeIntent = functions.https.onCall(async (data, context) => {
   let finalAmount = data.amount;
+  const stripe = new Stripe(config.value().stripe?.secret_key || "MISSING_KEY");
 
   // 🛡️ SECURITY: Verify discount eligibility in DB
   if (data.applyReferralReward) {
@@ -1725,6 +1721,9 @@ exports.generateAiImage = functions.https.onCall(async (data, context) => {
   const today = new Date().toISOString().split('T')[0];
   const docRef = db.collection('users').doc(userId).collection('daily_stats').doc(today);
   const MAX_GEN = 5; // 💎 Visible Limit
+  const replicate = new Replicate({
+    auth: config.value().replicate?.key || "MISSING_KEY",
+  });
 
   await db.runTransaction(async (t) => {
     const doc = await t.get(docRef);
@@ -1773,7 +1772,7 @@ exports.razorpayWebhook = functions
   .https.onRequest(async (req, res) => {
     const signature = req.headers['x-razorpay-signature'];
     const eventId = req.headers['x-razorpay-event-id'];
-    const secret = functions.config().razorpay?.webhook_secret;
+    const secret = config.value().razorpay?.webhook_secret;
 
     // 1. Validate Signature
     const expectedSignature = crypto
@@ -1953,7 +1952,7 @@ exports.stripeWebhook = functions
   .runWith({ timeoutSeconds: 300, memory: '1GB' })
   .https.onRequest(async (req, res) => {
     const signature = req.headers['stripe-signature'];
-    const secret = functions.config().stripe?.webhook_secret;
+    const secret = config.value().stripe?.webhook_secret;
 
     let event;
 
@@ -2168,6 +2167,7 @@ exports.onTicketReply = functions.firestore
   .onUpdate(async (change, context) => {
     const newData = change.after.data();
     const oldData = change.before.data();
+    const resend = new Resend(config.value().resend?.key);
 
     // 1. Check if a NEW message was added
     const newMessages = newData.messages || [];
@@ -2235,7 +2235,7 @@ exports.pollQikinkOrders = functions.runWith({ timeoutSeconds: 540, memory: '1GB
     // 2. AUTH
     let token;
     try { token = await getQikinkAccessToken(); } catch (e) { return null; }
-    const clientId = functions.config().qikink?.client_id;
+    const clientId = config.value().qikink?.client_id;
 
     const batch = db.batch();
     let updateCount = 0;
@@ -2347,6 +2347,7 @@ exports.pollQikinkOrders = functions.runWith({ timeoutSeconds: 540, memory: '1GB
 // ------------------------------------------------------------------
 exports.sendContactEmail = functions.https.onCall(async (data, context) => {
   const { name, email, subject, message } = data;
+  const resend = new Resend(config.value().resend?.key);
 
   // 1. Basic Validation
   if (!name || !email || !message) {

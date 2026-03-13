@@ -959,7 +959,7 @@ async function sendToGelato(orderData, processedItems) {
 // ------------------------------------------------------------------
 // 🚀 3. SEND TO QIKINK (With Placeholder Date)
 // ------------------------------------------------------------------
-const QIKINK_BASE_URL = "https://sandbox.qikink.com";
+const QIKINK_BASE_URL = "https://api.qikink.com/";
 
 async function getQikinkAccessToken() {
   const clientId = config.value().qikink?.client_id;
@@ -1501,19 +1501,20 @@ async function renderDesignServerSide(designJson, productId, view = 'front') {
            function renderFabric() {
                const canvas = new fabric.StaticCanvas('c');
                const json = ${JSON.stringify(designJson)};
-
-               canvas.loadFromJSON(json, function() {
-                   canvas.renderAll();
-                   
-                   window.canvasDataUrl = canvas.toDataURL({
-                       format: 'png',
-                       multiplier: ${exportMultiplier}
-                   });
-                   
-                   window.renderComplete = true; // Signal Node.js
-               });
+            canvas.loadFromJSON(json, function () {
+            canvas.backgroundColor = null;
+            canvas.getObjects().forEach(obj => {
+            obj.objectCaching = false;
+        });
+          canvas.renderAll();
+          window.canvasDataUrl = canvas.toDataURL({
+              format: "png",
+        multiplier: ${exportMultiplier},
+        backgroundColor: null
+           });
+             window.renderComplete = true;
+            });
            }
-
            // 1. Ask WebFontLoader to fetch exactly the families we need
            const fontsToLoad = ${JSON.stringify(googleFontsToLoad)};
 
@@ -1556,15 +1557,21 @@ exports.processNewOrder = functions
   .runWith({ timeoutSeconds: 300, memory: '4GB', secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
   .firestore.document('orders/{orderId}')
   .onUpdate(async (change, context) => {
+    const beforeData = change.before.data();
     const newData = change.after.data();
+    const orderId = context.params.orderId;
 
-    // 1. Safety Checks
+    if (beforeData.status === 'placed' && newData.status === 'placed') {
+      console.log(`[Bot Lock] Order ${orderId} was already placed. Ignoring duplicate trigger.`);
+      return null;
+    }
+
     if (newData.status !== 'placed' || newData.providerStatus === 'synced') return null;
     if (newData.providerStatus === 'processing') return null;
 
-    const orderId = context.params.orderId;
     console.log(`🤖 Processing Split Order ${orderId} (${newData.title})...`);
 
+    // ✅ Claim the job so no other process can touch it
     await change.after.ref.update({ providerStatus: 'processing' });
     loadFonts();
 
@@ -1793,7 +1800,7 @@ exports.razorpayWebhook = functions
       return res.status(400).send("Invalid signature");
     }
 
-    // 2. Idempotency
+    // 2. Idempotency Check 1
     if (!eventId) return res.status(400).send("Missing event ID");
     const eventRef = db.collection('webhookEvents').doc(eventId);
     const doc = await eventRef.get();
@@ -1804,24 +1811,33 @@ exports.razorpayWebhook = functions
 
       if (body.event === 'payment.captured' || body.event === 'order.paid') {
         const payload = body.payload.payment.entity;
+        const paymentId = payload.id;
+
+        const paymentRef = db.collection("processedPayments").doc(paymentId);
+        const paymentDoc = await paymentRef.get();
+
+        // 🛑 Idempotency Check 2
+        if (paymentDoc.exists) {
+          console.log("Duplicate payment webhook ignored:", paymentId);
+          return res.status(200).send("Already processed");
+        }
+
         const groupId = payload.notes?.groupId;
-        const amountPaid = payload.amount / 100; // Razorpay is in paise
+        const amountPaid = payload.amount / 100;
 
         if (!groupId) return res.status(400).send("Missing groupId");
 
-        // 3. Fetch Group Orders
         const snapshot = await db.collection("orders").where("groupId", "==", groupId).get();
         if (snapshot.empty) return res.status(404).send("Orders not found");
 
         const ordersToUpdate = snapshot.docs;
         const allOrderData = ordersToUpdate.map(d => d.data());
 
-        // 4. 🛡️ FRAUD CHECK
-        // In your frontend, every split order saves the 'totalPayAmount' in payment.total
         const expectedAmount = allOrderData[0].payment.total;
         const userId = allOrderData[0].userId;
 
-        if (Math.abs(amountPaid - expectedAmount) > 5) { // 5 Rupee buffer
+        // 4. 🛡️ FRAUD CHECK
+        if (Math.abs(amountPaid - expectedAmount) > 5) {
           const fraudMsg = `FRAUD: Group ${groupId} paid ${amountPaid} but expected ${expectedAmount}`;
           console.error(`🚨 ${fraudMsg}`);
 
@@ -1834,7 +1850,6 @@ exports.razorpayWebhook = functions
             });
           });
 
-          // Ban the user
           if (userId && userId !== 'guest') {
             fraudBatch.update(db.collection('users').doc(userId), {
               isBanned: true,
@@ -1861,18 +1876,8 @@ exports.razorpayWebhook = functions
                 const launchData = launchDoc.data();
 
                 if (!userData.isFoundingCreator && launchData.claimed_slots < launchData.total_slots) {
-
-                  // Claim the slot securely
-                  t.update(launchRef, {
-                    claimed_slots: admin.firestore.FieldValue.increment(1)
-                  });
-
-                  // Award the badge to the user
-                  t.update(userRef, {
-                    isFoundingCreator: true
-                  });
-
-                  console.log(`🎉 User ${userId} claimed Founding Creator slot ${launchData.claimed_slots + 1}!`);
+                  t.update(launchRef, { claimed_slots: admin.firestore.FieldValue.increment(1) });
+                  t.update(userRef, { isFoundingCreator: true });
                 }
               }
             });
@@ -1880,41 +1885,31 @@ exports.razorpayWebhook = functions
             console.error("❌ Founding Creator Transaction Error:", err);
           }
         }
-        const batch = db.batch();
 
+        const batch = db.batch();
         const orderData = allOrderData[0];
+
         if (orderData.referralDiscountApplied) {
-          batch.update(db.collection('users').doc(userId), {
-            hasActiveReward: false,
-            referralCount: 0
-          });
+          batch.update(db.collection('users').doc(userId), { hasActiveReward: false, referralCount: 0 });
         }
 
-        // 2. Increment Referrer's Count (If this is buyer's first purchase)
+        // Increment Referrer's Count
         if (userId && userId !== 'guest') {
           const userDoc = await db.collection('users').doc(userId).get();
           if (userDoc.exists) {
             const userData = userDoc.data();
             if (userData.referredBy && !userData.hasMadeFirstPurchase) {
-              // Mark buyer as converted
               batch.update(db.collection('users').doc(userId), { hasMadeFirstPurchase: true });
-
-              // Find the friend who invited them
               const referrerRef = db.collection('users').doc(userData.referredBy);
               const referrerDoc = await referrerRef.get();
 
               if (referrerDoc.exists) {
                 const refData = referrerDoc.data();
-
-                // Only increment if they aren't currently locked
                 if (!refData.hasActiveReward) {
                   const newCount = (refData.referralCount || 0) + 1;
-
                   if (newCount >= 3) {
-                    // Trigger the lock and reward!
                     batch.update(referrerRef, { referralCount: 3 });
                   } else {
-                    // Just increment progress
                     batch.update(referrerRef, { referralCount: newCount });
                   }
                 }
@@ -1925,26 +1920,32 @@ exports.razorpayWebhook = functions
 
         // 5. ✅ SUCCESS: Batch Update
         ordersToUpdate.forEach((docSnap) => {
-          // Only update if not already processed
           if (docSnap.data().status !== 'placed') {
             batch.update(docSnap.ref, {
               status: 'placed',
               'payment.status': 'paid',
               'payment.transactionId': payload.id,
-              providerStatus: 'pending', // 🟢 Wakes up your processNewOrder bot!
+              providerStatus: 'pending',
               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
           }
         });
-        await batch.commit();
-        console.log(`✅ Razorpay Group Order ${groupId} successfully paid.`);
 
-        // 6. 🧾 GENERATE INVOICE
-        await generateAndSendConsolidatedInvoice(allOrderData);
+        // This triggers the processNewOrder bot
+        await batch.commit();
+
+        // This triggers the Invoice bot
+        await paymentRef.set({
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+          groupId: groupId,
+          userId: userId
+        });
+        console.log(`✅ Razorpay Group Order ${groupId} successfully paid.`);
       }
 
-      // Lock Event
       await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp(), event: body.event });
+
+      // 🚀 HANG UP INSTANTLY. No slow invoice code here.
       res.status(200).send("OK");
 
     } catch (error) {
@@ -2120,12 +2121,31 @@ exports.stripeWebhook = functions
     }
   });
 
-exports.sendConsolidatedInvoice = functions
-  .runWith({ memory: '1GB', timeoutSeconds: 120, secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
-  .https.onCall(async (data, context) => {
-    if (!data.orders || data.orders.length === 0) return;
-    await generateAndSendConsolidatedInvoice(data.orders);
-    return { success: true };
+// 🧾 NEW: Background bot for generating the Consolidated Invoice
+exports.processPaymentInvoice = functions
+  .runWith({ timeoutSeconds: 300, memory: '1GB', secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
+  .firestore.document('processedPayments/{paymentId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data();
+    const groupId = data.groupId;
+
+    if (!groupId) return null;
+
+    try {
+      console.log(`🧾 Generating Invoice for Group ${groupId}...`);
+      const snapshot = await db.collection("orders").where("groupId", "==", groupId).get();
+      if (snapshot.empty) return null;
+
+      const allOrderData = snapshot.docs.map(d => d.data());
+
+      // Call your existing PDF/Email function safely in the background
+      await generateAndSendConsolidatedInvoice(allOrderData);
+      console.log(`✅ Invoice sent for Group ${groupId}`);
+    } catch (error) {
+      console.error(`❌ Invoice Generation Failed for Group ${groupId}:`, error);
+    }
+
+    return null;
   });
 
 // ------------------------------------------------------------------

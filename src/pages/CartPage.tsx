@@ -14,7 +14,7 @@ import {
   Pencil,
   RotateCcw,
   LogIn,
-  ShieldCheck
+  ShieldCheck, Sparkles, Tag, Zap
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { calculatePriceDetails } from "@/lib/priceUtils";
@@ -24,7 +24,8 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/firebase";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Zap } from "lucide-react";
+import { calculateCartTotalsAndAllocations, getVolumeDiscount } from "@/lib/discountUtils";
+
 
 // ------------------------------------------------------------------
 // 💀 SKELETON COMPONENTS
@@ -112,6 +113,10 @@ export default function CartPage() {
     acc.totalSavings += (savings * item.quantity);
     return acc;
   }, { totalMRP: 0, totalSavings: 0 });
+  // 🟢 NEW: Calculate macro-totals and gamification
+
+  const { summary } = calculateCartTotalsAndAllocations(items, applyReward);
+  const { discountPct, message, progress, color, bgProgress } = getVolumeDiscount(summary.totalItems);
 
   // 1. Loading State (Now using Skeletons)
   if (isLoading) {
@@ -205,6 +210,28 @@ export default function CartPage() {
 
             {/* === LEFT COLUMN: ITEMS === */}
             <div className="lg:col-span-2 space-y-8">
+              {items.length > 0 && (
+                <div className="mb-6 flex flex-col gap-3 p-4 rounded-xl border border-orange-500/20 bg-orange-500/5 shadow-inner">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm font-medium">
+                      <span className={`flex items-center gap-1.5 ${color}`}>
+                        {discountPct > 0 ? <Sparkles size={16} /> : <Tag size={16} />}
+                        {message}
+                      </span>
+                      {discountPct > 0 && (
+                        <span className="text-green-400 font-bold animate-pulse">-{discountPct * 100}% Off!</span>
+                      )}
+                    </div>
+
+                    <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-500 ease-out ${bgProgress}`}
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* 1. ACTIVE CART ITEMS */}
               {!isCartEmpty && (
@@ -368,29 +395,38 @@ export default function CartPage() {
                     <CardHeader className="border-b border-white/5 pb-4">
                       <CardTitle className="text-white text-lg">Order Summary</CardTitle>
                     </CardHeader>
-                    <CardContent className="p-6 space-y-6">
+                    <CardContent className="space-y-6">
 
-                      <div className="space-y-3 text-sm text-slate-300">
+                      {/* 🟢 NEW: TRANSPARENT MACRO RECEIPT TOTALS */}
+                      <div className="space-y-4 text-sm mb-6">
                         <div className="flex justify-between text-slate-400">
-                          <span>Total MRP</span>
-                          <span className="line-through">₹{cartAnalysis.totalMRP.toFixed(2)}</span>
+                          <span>Subtotal ({summary.totalItems} items)</span>
+                          <span>₹{summary.mrpSubtotal.toFixed(2)}</span>
                         </div>
 
-                        <div className="flex justify-between text-green-400">
-                          <span>Discount on MRP</span>
-                          <span>-₹{cartAnalysis.totalSavings.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
+                        {summary.totalBulkDiscount > 0 && (
+                          <div className="flex justify-between text-green-400 font-medium">
+                            <span>Bulk Savings ({discountPct * 100}%)</span>
+                            <span>-₹{summary.totalBulkDiscount.toFixed(2)}</span>
+                          </div>
+                        )}
+
+
+                        {summary.totalReferralDiscount > 0 && (
+                          <div className="flex justify-between text-green-400 font-medium">
+                            <span>Referral Reward</span>
+                            <span>-₹{summary.totalReferralDiscount.toFixed(2)}</span>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between text-slate-400">
                           <span>Shipping</span>
-                          <span className="text-green-400">Free</span>
+                          <span className="text-green-400 uppercase text-xs font-bold tracking-wider">Free</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>Incl. of tax</span>
-                        </div>
+                      </div>
 
-                        <Separator className="bg-white/10 my-2" />
-
-                        {/* 🎁 THE REWARD TOGGLE */}
+                      <div className="h-px bg-white/10 my-4" />
+                       {/* 🎁 THE REWARD TOGGLE */}
                         {hasActiveReward && (
                           <div className="flex items-center justify-between p-3 my-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-xl shadow-[0_0_15px_rgba(234,88,12,0.1)]">
                             <div className="flex items-center gap-3">
@@ -403,35 +439,35 @@ export default function CartPage() {
                                 </Label>
                               </div>
                             </div>
-                            <Switch 
-                              id="reward-toggle" 
-                              checked={applyReward} 
-                              onCheckedChange={setApplyReward} 
+                            <Switch
+                              id="reward-toggle"
+                              checked={applyReward}
+                              onCheckedChange={setApplyReward}
                               className="data-[state=checked]:bg-orange-500"
                             />
                           </div>
                         )}
+                        
+                      <div className="h-px bg-white/10 my-4" />
 
-                        {applyReward && (
-                          <div className="flex justify-between text-sm text-green-400 font-medium">
-                            <span>Referral Reward</span>
-                            <span>-₹100.00</span>
-                          </div>
-                        )}
-
-                        <div className="flex justify-between text-xl font-bold text-white pt-2">
-                          <span>Total Amount</span>
-                          <span>₹{applyReward ? Math.max(0, cartTotal - 100).toFixed(2) : cartTotal.toFixed(2)}</span>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center text-xl font-bold text-white mb-2">
+                          <span>Total</span>
+                          {/* 🟢 NEW: Use the safe, calculated final total */}
+                          <span className="text-orange-400">₹{summary.finalGrandTotal.toFixed(2)}</span>
                         </div>
 
                         {/* 🏆 THE SAVINGS BANNER */}
-                        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2 text-center text-xs font-bold text-green-400">
-                          You are saving ₹{cartAnalysis.totalSavings.toFixed(2)} on this order!
-                        </div>
+                        {(summary.totalBulkDiscount > 0 || summary.totalReferralDiscount > 0) && (
+                          <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2 text-center text-xs font-bold text-green-400">
+                            You are saving ₹{(summary.totalBulkDiscount + summary.totalReferralDiscount).toFixed(2)} on this order!
+                          </div>
+                        )}
                       </div>
 
                       <Button
                         onClick={() => navigate(`/checkout?mode=cart&reward=${applyReward}`)}
+                        disabled={items.length === 0}
                         className="w-full h-12 text-lg font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.02]"
                       >
                         Proceed to Checkout <ArrowRight className="ml-2 h-5 w-5" />

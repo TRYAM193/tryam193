@@ -19,7 +19,7 @@ import { db } from '@/firebase';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { ThreeDPreviewModal } from '../components/ThreeDPreviewModal';
 import { Button } from "@/components/ui/button";
-import { Loader2, Save, Undo2, Redo2, Eye, ClipboardPaste } from "lucide-react";
+import { Loader2, Save, Undo2, Redo2, Eye, ClipboardPaste, Sparkles, Tag } from "lucide-react";
 import { COLOR_MAP } from '../../lib/colorMaps'
 import { FiTrash2, FiLayers, FiCheckCircle, FiChevronDown, FiShoppingBag, FiShoppingCart, FiPlus, FiMinus } from 'react-icons/fi';
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -31,6 +31,7 @@ import SaveTemplateButton from '../components/SaveTemplateButton';
 import { v4 as uuidv4 } from 'uuid';
 import { uploadToStorage } from '../utils/saveDesign'
 import { PriceDisplay } from '@/components/PriceDisplay';
+import { getVolumeDiscount } from "@/lib/discountUtils";
 
 function removeUndefined(obj) {
     if (Array.isArray(obj)) {
@@ -141,7 +142,7 @@ export default function EditorPanel() {
     const [quantity, setQuantity] = useState(1);
 
     const [canvasBg, setCanvasBg] = useState(COLOR_MAP[urlColor]);
-    const [currentView, setCurrentView] = useState("front");
+    const [currentView, setCurrentView] = useState(productData?.print_areas?.front ? 'front' : 'back');
     const [viewStates, setViewStates] = useState({});
 
     // ✅ NEW: Track Full Fabric JSON for High-Quality Rendering
@@ -181,6 +182,7 @@ export default function EditorPanel() {
         }
     }, []);
 
+    // --- Calculate Prices & Gamified Discounts ---
     const currencyInfo = CURRENCY_MAP[urlRegion] || CURRENCY_MAP.IN;
     let currentPrice = 0;
     if (productData) {
@@ -190,7 +192,15 @@ export default function EditorPanel() {
             currentPrice = productData.price || 0;
         }
     }
-    const totalPrice = (currentPrice * quantity).toFixed(2);
+
+    // Calculate gamification stats based on quantity
+    const { discountPct, message, progress, color, bgProgress } = getVolumeDiscount(quantity);
+    const totalOriginal = currentPrice * quantity;
+    const discountAmount = totalOriginal * discountPct;
+    const finalTotal = totalOriginal - discountAmount;
+
+    // Override totalPrice so the mobile layout and payloads automatically get the right number
+    const totalPrice = finalTotal.toFixed(2);
 
     useEffect(() => {
         if (!selectedId) {
@@ -460,6 +470,7 @@ export default function EditorPanel() {
                     }
 
                     setCanvasBg(templateData.canvasBackground)
+                    fabricCanvas?.requestRenderAll()
 
                     // C. Detach from the template (treat as new design)
                     setEditingDesignId(null);
@@ -783,6 +794,7 @@ export default function EditorPanel() {
 
         return dataUrl;
     };
+    console.log(currentView);
 
     const captureCurrentCanvas = () => {
         const url = getCleanDataURL(1200);
@@ -799,6 +811,9 @@ export default function EditorPanel() {
 
     const handleSwitchView = async (newView) => {
         if (!fabricCanvas || newView === currentView) return;
+
+        const currentSnapshot = captureCurrentCanvas();
+        setDesignTextures(prev => ({ ...prev, [currentView]: currentSnapshot }));
 
         // 1. Capture Redux State (For Editor Reloads)
         const currentReduxState = store.getState().canvas.present;
@@ -851,6 +866,7 @@ export default function EditorPanel() {
 
     const handleGeneratePreview = () => {
         if (!fabricCanvas) return;
+        fabricCanvas.discardActiveObject();
         setIsGeneratingPreview(true);
         setTimeout(() => {
             const currentSnapshot = captureCurrentCanvas();
@@ -1139,7 +1155,7 @@ export default function EditorPanel() {
                                     </div>
                                 </div>
 
-                                <div className="mb-8">
+                                <div className="mb-4">
                                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Quantity</h3>
                                     <div className="flex items-center gap-4">
                                         <div className="flex items-center border border-slate-700 rounded-md bg-slate-900/50">
@@ -1147,32 +1163,65 @@ export default function EditorPanel() {
                                             <input type="number" value={quantity} onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))} className="w-12 text-center text-sm font-medium focus:outline-none bg-transparent text-white" />
                                             <button onClick={() => setQuantity(q => q + 1)} className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white"><FiPlus size={14} /></button>
                                         </div>
-                                        <div className="text-sm text-slate-400">{currencyInfo.symbol}{totalPrice} total</div>
+                                        <div className="text-sm text-slate-400">
+                                            {quantity} x {currencyInfo.symbol}{currentPrice}
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="mt-auto pt-6 border-t border-slate-700">
-                                    <div className="flex justify-between items-end mb-4">
-                                        <div className="flex justify-between items-end mb-4">
-                                            <div>
-                                                <p className="text-xs text-slate-400 mb-1">Total Price</p>
-                                                <PriceDisplay
-                                                    // We pass unit price * quantity = totalPrice
-                                                    price={parseFloat(totalPrice)}
-                                                    currency={currencyInfo.symbol}
-                                                    productId={urlProductId || currentDesign?.productConfig?.productId || productData.id}
-                                                    size="lg"
-                                                />
-                                            </div>
-
-                                            {/* Optional: Show per-unit breakdown if quantity > 1 */}
-                                            {quantity > 1 && (
-                                                <div className="text-xs text-slate-500 mb-1 text-right">
-                                                    {quantity} x {currencyInfo.symbol}{currentPrice}
-                                                </div>
+                                {/* 🎮 THE GAMIFICATION PROGRESS BAR */}
+                                <div className="mb-4 flex flex-col gap-3 p-3 rounded-xl border border-white/10 bg-slate-900/40 shadow-inner">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center text-xs font-medium">
+                                            <span className={`flex items-center gap-1.5 ${color}`}>
+                                                {discountPct > 0 ? <Sparkles size={14} /> : <Tag size={14} />}
+                                                {message}
+                                            </span>
+                                            {discountPct > 0 && (
+                                                <span className="text-green-400 font-bold animate-pulse">-{discountPct * 100}%</span>
                                             )}
                                         </div>
+
+                                        {/* Progress Bar Container */}
+                                        <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full transition-all duration-500 ease-out ${bgProgress}`}
+                                                style={{ width: `${progress}%` }}
+                                            />
+                                        </div>
                                     </div>
+                                </div>
+
+                                {/* 💰 PRICING & BUTTONS */}
+                                <div className="mt-auto pt-4 border-t gap-4 items-center border-slate-700">
+                                    <div className="flex justify-between items-end mb-4">
+                                        <div className="flex flex-col">
+                                            <p className="text-xs text-slate-400 mb-1">Total Price</p>
+                                            {/* Show crossed-out original price if there's a discount */}
+                                            {discountPct > 0 && (
+                                                <span className="text-xs text-red-400 line-through mb-0.5">
+                                                    {currencyInfo.symbol}{totalOriginal.toFixed(2)}
+                                                </span>
+                                            )}
+                                            <PriceDisplay
+                                                // We pass unit price * quantity = totalPrice
+                                                price={parseFloat(totalPrice)}
+                                                currency={currencyInfo.symbol}
+                                                productId={urlProductId || currentDesign?.productConfig?.productId || productData.id}
+                                                size="lg"
+                                            />
+                                        </div>
+
+                                        {/* Savings Badge */}
+                                    </div>
+                                    {discountPct > 0 && (
+                                        <div className="flex flex-col items-center mb-4">
+                                            <div className="text-xs text-green-400 font-bold bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20 shadow-sm">
+                                                You save {currencyInfo.symbol}{discountAmount.toFixed(2)}!
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="flex gap-3 flex-col sm:flex-row">
                                         <Button onClick={handleAddToCart} disabled={isAddingToCart || !fabricCanvas} className={`flex-1 h-12 w-10 text-base text-white border border-slate-600 ${isEditMode ? "bg-blue-600 hover:bg-blue-700 border-blue-500" : "bg-slate-700 hover:bg-slate-600"}`}>
                                             {isAddingToCart ? <Loader2 className="animate-spin" /> : isEditMode ? <> <Save className="mr-2 h-4 w-4" /> Update Cart </> : <> <FiShoppingBag className="mr-2" /> Add to Cart </>}
@@ -1183,6 +1232,8 @@ export default function EditorPanel() {
                                     </div>
                                     <p className="text-[10px] text-center text-slate-500 mt-2">Secure checkout powered by Razorpay</p>
                                 </div>
+
+
                             </div>
                         ) : (!fabricCanvas?.getActiveObject() &&
                             <div className="h-full flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in-95 duration-300">

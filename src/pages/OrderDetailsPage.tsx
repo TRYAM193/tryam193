@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router";
 import {
   Truck, Calendar, MapPin, ExternalLink,
-  ArrowLeft, RefreshCw, Loader2, Check, Circle, Zap,
+  ArrowLeft, RefreshCw, Loader2, Check, Circle, Zap, Tag,
   Printer, Shirt, CreditCard, ShieldCheck, HelpCircle, AlertCircle,
   Sparkles, Archive, FileImage, Download, Phone, Send, MessageSquare, XCircle
 } from "lucide-react";
@@ -681,6 +681,12 @@ export default function OrderDetailsPage() {
   const specificOrderTotal = order?.payment?.total ?? (order ? (Number(order.price) * Number(order.quantity)) : 0);
 
   const currencySymbol = order?.payment?.currency || order?.currency || '$';
+  const ledger = order?.payment?.ledger || {};
+  
+  // Fallback to legacy structure if ledger doesn't exist for old orders
+  const basePrice = ledger.basePrice ?? (order ? (Number(order.price) * Number(order.quantity)) : 0);
+  const bulkDiscount = ledger.allocatedBulkDiscount ?? 0;
+  const refDiscount = ledger.allocatedReferralDiscount ?? (order?.referralDiscountApplied ? 100 : 0);
 
   if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center"><Loader2 className="animate-spin text-orange-500 h-8 w-8" /></div>;
   if (!order) return <div className="text-white text-center pt-20">Order not found</div>;
@@ -780,50 +786,96 @@ export default function OrderDetailsPage() {
                   </div>
 
                   {/* INFO GRID */}
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
-                    <div className="col-span-2 space-y-1">
-                      <span className="text-xs uppercase text-slate-500 font-bold tracking-wider">Product</span>
-                      <p className="text-white font-medium text-lg leading-tight">{order.title || order.productTitle || "Custom Product"}</p>
-                      <p className="text-[10px] text-green-400 flex items-center gap-1 mt-1">
-                        <ShieldCheck className="h-3 w-3" /> {QUALITY_LINES[0]}
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-xs uppercase text-slate-500 font-bold tracking-wider">Variant</span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="secondary" className="bg-slate-700 text-white">{order.variant?.size || "L"}</Badge>
-                        <Badge variant="secondary" className="bg-slate-700 text-white capitalize">{order.variant?.color || "Black"}</Badge>
+                  <div className="flex-1 flex flex-col gap-5">
+                    
+                    {/* Title & Trust Badge */}
+                    <div>
+                      <h2 className="text-2xl font-black text-white leading-tight mb-1.5">
+                        {order.title || order.productTitle || "Custom Product"}
+                      </h2>
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
+                          <ShieldCheck className="h-3 w-3" /> Quality Verified
+                        </span>
+                        <span className="text-xs text-slate-500">Premium Fit & Finish</span>
                       </div>
                     </div>
 
-                    <div className="hidden sm:block"></div>
+                    {/* Bento Box Specs */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Variant Card */}
+                      <div className="bg-slate-900/60 border border-white/5 rounded-xl p-3 flex flex-col justify-center">
+                        <span className="text-[10px] uppercase text-slate-500 font-bold tracking-widest mb-1.5">Variant</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="bg-slate-800 border-slate-700 text-white shadow-sm">
+                            {order.variant?.size || "L"}
+                          </Badge>
+                          <Badge variant="outline" className="bg-slate-800 border-slate-700 text-white capitalize shadow-sm">
+                            {order.variant?.color || "Black"}
+                          </Badge>
+                        </div>
+                      </div>
 
-                    <div className="space-y-1">
-                      <span className="text-xs uppercase text-slate-500 font-bold tracking-wider">Quantity</span>
-                      <p className="text-white font-medium text-lg">{order.quantity}</p>
+                      {/* Quantity Card */}
+                      <div className="bg-slate-900/60 border border-white/5 rounded-xl p-3 flex flex-col justify-center">
+                        <span className="text-[10px] uppercase text-slate-500 font-bold tracking-widest mb-1">Quantity</span>
+                        <div className="flex items-end gap-2">
+                          <span className="text-2xl font-black text-white leading-none">{order.quantity}</span>
+                          <span className="text-xs text-slate-500 mb-0.5">Units</span>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="space-y-1">
-                      <span className="text-xs uppercase text-slate-500 font-bold tracking-wider">Price Paid</span>
-                      <div className="flex flex-col">
-                        <p className="text-green-400 font-bold text-lg">
-                          {currencySymbol} {specificOrderTotal.toFixed(2)}
-                        </p>
-                        
-                        {/* 🎁 GLOWING REWARD BADGE */}
-                        {order.referralDiscountApplied && (
-                          <div className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-orange-400 bg-orange-500/10 px-2 py-1 rounded-md border border-orange-500/20 w-fit">
-                            <Zap className="h-3 w-3" /> Includes -{currencySymbol}100 Reward
+                    {/* 🧾 DIGITAL RECEIPT CARD */}
+                    <div className="relative mt-2 bg-gradient-to-b from-slate-900/80 to-[#0f172a] border border-slate-800 rounded-2xl p-5 shadow-2xl overflow-hidden">
+                      {/* Decorative elements */}
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl" />
+                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-slate-700 to-transparent opacity-50" />
+                      
+                      <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <CreditCard className="w-3.5 h-3.5" /> Item Receipt
+                      </h4>
+
+                      <div className="space-y-2.5 relative z-10">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-slate-400">Base Price (x{order.quantity})</span>
+                          <span className="text-slate-200 font-medium">{currencySymbol} {basePrice.toFixed(2)}</span>
+                        </div>
+
+                        {bulkDiscount > 0 && (
+                          <div className="flex justify-between items-center text-sm group">
+                            <span className="flex items-center gap-1.5 text-green-400">
+                              <Tag className="w-3.5 h-3.5" /> Bulk Savings
+                            </span>
+                            <span className="text-green-400 font-bold">- {currencySymbol} {bulkDiscount.toFixed(2)}</span>
+                          </div>
+                        )}
+
+                        {refDiscount > 0 && (
+                          <div className="flex justify-between items-center text-sm group">
+                            <span className="flex items-center gap-1.5 text-orange-400">
+                              <Zap className="w-3.5 h-3.5" /> Referral Reward
+                            </span>
+                            <span className="text-orange-400 font-bold">- {currencySymbol} {refDiscount.toFixed(2)}</span>
                           </div>
                         )}
                       </div>
-                    </div>
 
-                    <div className="col-span-2 pt-2">
-                      <Button size="sm" variant="secondary" className="bg-white/10 hover:bg-white/20 text-white border-0">
-                        Buy Again
-                      </Button>
+                      {/* Dashed Receipt Line */}
+                      <div className="w-full border-t border-dashed border-slate-700 my-4 relative z-10" />
+
+                      <div className="flex justify-between items-end relative z-10">
+                        <div className="flex flex-col">
+                          <span className="text-xs text-slate-500 mb-0.5">Total Paid</span>
+                          <span className="text-2xl font-black text-white leading-none">
+                            {currencySymbol} {specificOrderTotal.toFixed(2)}
+                          </span>
+                        </div>
+                        
+                        <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/5 shadow-sm rounded-lg h-9 px-4 transition-all hover:scale-105">
+                          Buy Again
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -943,10 +995,16 @@ export default function OrderDetailsPage() {
                     <span className="text-slate-400">Method</span>
                     <span className="text-white font-medium">Standard Shipping</span>
                   </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-400">Est. Delivery</span>
-                    <span className="text-green-400 font-medium">
-                      {order.providerData?.estimatedDelivery ? formatDate(order.providerData.estimatedDelivery) : "Calculated after shipping"}
+                  
+                  {/* 🟢 FRIENDLY DELIVERY TIMELINE EXPECTATION */}
+                  <div className="flex flex-col gap-1.5 pt-4 mt-2 border-t border-white/10">
+                    <span className="text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+                      Delivery Timeline
+                    </span>
+                    <span className="text-indigo-300 text-sm leading-relaxed">
+                      {order.status === 'shipped' || order.status === 'delivered'
+                        ? "Your order is on the move! Please check your tracking link for the exact delivery date. 🚚"
+                        : "Since your item is custom-made just for you, our courier partner will calculate the exact delivery date once it ships. We'll notify you with a tracking link as soon as it's ready! 📦"}
                     </span>
                   </div>
                   {order.providerData?.trackingCode && (

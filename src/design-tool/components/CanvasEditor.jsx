@@ -587,12 +587,8 @@ export default function CanvasEditor({
             } catch (err) { console.error("Failed to load SVG:", err); }
           } else {
             existing.set({
-              left: objData.props.left, top: objData.props.top, scaleX: objData.props.scaleX,
-              scaleY: objData.props.scaleY, angle: objData.props.angle, opacity: objData.props.opacity
+              ...objData.props
             });
-            if (objData.props.fill && existing._objects) {
-              existing._objects.forEach(path => path.set('fill', objData.props.fill));
-            }
             existing.setCoords();
           }
         }
@@ -657,7 +653,7 @@ export default function CanvasEditor({
       ref={wrapperRef}
       id="canvas-wrapper"
       className="relative w-full h-full flex flex-col gap-2 items-center justify-center overflow-auto no-scrollbar"
-      style={{ touchAction: 'none' }} 
+      style={{ touchAction: 'none'}} 
     >
       {!productId &&
         <div

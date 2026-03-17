@@ -1,8 +1,9 @@
 import React from 'react';
-import { X, ShoppingBag, CreditCard, Minus, Plus, Check } from 'lucide-react';
+import { X, ShoppingBag, CreditCard, Minus, Plus, Check, Sparkles, Tag } from 'lucide-react';
 import { COLOR_MAP } from '@/lib/colorMaps';
 import { Button } from '@/components/ui/button';
 import { PriceDisplay } from "@/components/PriceDisplay";
+import { getVolumeDiscount } from '@/lib/discountUtils';
 
 export default function ProductDrawer({
     product,
@@ -23,7 +24,10 @@ export default function ProductDrawer({
     sizes
 }) {
     if (!product) return null;
-    console.log(selectedColor)
+    const currentPrice = typeof product.price === 'object' ? (product.price.IN || 0) : (product.price || 0);
+    const totalOriginal = currentPrice * quantity;
+    const { discountPct, message, progress, color, bgProgress } = getVolumeDiscount(quantity);
+    const discountAmount = totalOriginal * discountPct;
 
     return (
         <div className="fixed inset-0 z-50 flex items-end justify-center pointer-events-none">
@@ -92,6 +96,7 @@ export default function ProductDrawer({
 
                 {/* Quantity & Actions */}
                 <div className="space-y-4">
+
                     <div className="flex items-center justify-between bg-slate-900/50 p-3 rounded-xl border border-white/5">
                         <span className="text-sm text-slate-300 font-medium">Quantity</span>
                         <div className="flex items-center gap-4">
@@ -100,6 +105,39 @@ export default function ProductDrawer({
                             <button onClick={() => setQuantity(quantity + 1)} className="w-8 h-8 flex items-center justify-center bg-slate-800 rounded-lg text-white"><Plus size={16} /></button>
                         </div>
                     </div>
+
+                    {/* 🟢 1. GAMIFICATION PROGRESS BAR */}
+                    <div className="mt-4 mb-3 flex flex-col gap-3 p-3 rounded-xl border border-white/10 bg-slate-900/40 shadow-inner">
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center text-xs font-medium">
+                                <span className={`flex items-center gap-1.5 ${color}`}>
+                                    {discountPct > 0 ? <Sparkles size={14} /> : <Tag size={14} />}
+                                    {message}
+                                </span>
+                                {discountPct > 0 && (
+                                    <span className="text-green-400 font-bold animate-pulse">-{discountPct * 100}%</span>
+                                )}
+                            </div>
+                            
+                            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                <div 
+                                    className={`h-full transition-all duration-500 ease-out ${bgProgress}`} 
+                                    style={{ width: `${progress}%` }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 🟢 2. RESTORED PRICING COMPONENT + SAVINGS BADGE */}
+                    <div className="flex justify-between items-end mb-4 pt-3 border-t border-slate-700">
+                        {/* Extra push: The physical Rupee amount saved */}
+                        {discountPct > 0 && (
+                            <div className="text-xs text-green-400 font-bold bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20 shadow-sm mb-1">
+                                Bulk Savings: -{currencySymbol}{discountAmount.toFixed(2)}
+                            </div>
+                        )}
+                    </div>
+                    
 
                     <div className="grid grid-cols-2 gap-3 pt-2">
                         <Button

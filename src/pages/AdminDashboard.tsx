@@ -85,6 +85,22 @@ export default function AdminDashboard() {
         } catch (error) { toast.error("Failed to approve order."); }
     };
 
+    const handleApproveBulkOrder = async (orderId: string) => {
+        try {
+            toast.loading("Approving Bulk Order...");
+            await updateDoc(doc(db, "orders", orderId), {
+                providerStatus: "admin_approved",
+                approvedAt: new Date().toISOString()
+            });
+            toast.dismiss();
+            toast.success("Bulk Order Approved! Bot is waking up.");
+            setViewOrder(null); // Close the modal
+        } catch (error) {
+            toast.dismiss();
+            toast.error("Failed to approve order.");
+        }
+    };
+
     const handleRetryBot = async (orderId: string) => {
         try {
             await updateDoc(doc(db, "orders", orderId), {
@@ -167,7 +183,13 @@ export default function AdminDashboard() {
         (o.payment?.method === 'cod' || o.isCod === true) &&
         !['placed', 'shipped', 'delivered', 'cancelled'].includes(o.status)
     );
-    const activeOrders = filteredOrders.filter(o => !codPendingOrders.includes(o));
+
+    const reviewPendingOrders = filteredOrders.filter(o => o.providerStatus === 'pending_admin_approval');
+
+    // 🟢 UPDATED: Hide review orders from the standard live view
+    const activeOrders = filteredOrders.filter(o =>
+        !codPendingOrders.includes(o) && o.providerStatus !== 'pending_admin_approval'
+    );
     const openTickets = tickets.filter(t => t.status !== 'closed');
 
     return (
@@ -178,6 +200,7 @@ export default function AdminDashboard() {
                 order={viewOrder}
                 isOpen={!!viewOrder}
                 onClose={() => setViewOrder(null)}
+                onApproveBulk={handleApproveBulkOrder}
             />
 
             {/* 🟠 MANUAL FULFILL MODAL */}
@@ -244,6 +267,10 @@ export default function AdminDashboard() {
                         COD Queue
                         {codPendingOrders.length > 0 && <span className="ml-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white animate-pulse">{codPendingOrders.length}</span>}
                     </TabsTrigger>
+                    <TabsTrigger value="reviews" className="flex-1 text-white relative">
+                        Action Needed
+                        {reviewPendingOrders.length > 0 && <span className="ml-2 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-[10px] text-white animate-pulse">{reviewPendingOrders.length}</span>}
+                    </TabsTrigger>
                     <TabsTrigger value="support" className="flex-1 text-white relative">
                         Helpdesk
                         {openTickets.length > 0 && <span className="ml-2 flex h-4 w-4 items-center justify-center rounded-full bg-purple-500 text-[10px] text-white">{openTickets.length}</span>}
@@ -278,6 +305,21 @@ export default function AdminDashboard() {
                                 onView={(o: any) => setViewOrder(o)}
                                 onDelete={handleDeleteOrder}
                                 type="cod"
+                            />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="reviews" className="mt-4">
+                    <Card className="bg-slate-900 border-slate-800 border-l-4 border-l-orange-500">
+                        <CardHeader className="px-4 py-4"><CardTitle className="text-white">Bulk Orders Pending Review</CardTitle></CardHeader>
+                        <CardContent className="p-0 md:p-6 pt-0">
+                            <OrderTable
+                                data={reviewPendingOrders}
+                                loading={loading}
+                                onView={(o: any) => setViewOrder(o)}
+                                onDelete={handleDeleteOrder}
+                                type="reviews"
                             />
                         </CardContent>
                     </Card>
@@ -355,7 +397,7 @@ export default function AdminDashboard() {
 // ------------------------------------------------------------------
 // 📄 SUB-COMPONENT: ORDER DETAILS MODAL (The New Feature)
 // ------------------------------------------------------------------
-function OrderDetailsModal({ order, isOpen, onClose }: any) {
+function OrderDetailsModal({ order, isOpen, onClose, onApproveBulk }: any) {
     if (!order) return null;
 
     // Helper to get Invoice URL (Standardized path or saved URL)
@@ -481,6 +523,17 @@ function OrderDetailsModal({ order, isOpen, onClose }: any) {
                             <span className="text-xs text-slate-500 flex items-center ml-2">Invoice generates after delivery</span>
                         )}
                     </div>
+                    
+                    {/* 🟢 NEW: The Bulk Approval Button */}
+                    {order.providerStatus === 'pending_admin_approval' && (
+                        <Button 
+                            onClick={() => onApproveBulk(order.id)}
+                            className="bg-orange-600 hover:bg-orange-700 text-white mr-2"
+                        >
+                            <CheckCircle className="h-4 w-4 mr-2" /> Approve & Fulfill
+                        </Button>
+                    )}
+
                     <Button onClick={onClose}>Close</Button>
                 </DialogFooter>
             </DialogContent>
@@ -617,6 +670,10 @@ function StatusBadge({ status, error, globalStatus }: { status: string, error?: 
     if (status === 'synced') return <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Synced</Badge>;
     if (status === 'manual') return <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20">Manual</Badge>;
     if (status === 'error') return <Badge variant="destructive" className="bg-red-500/10 text-red-400 border-red-500/20">Bot Error</Badge>;
+    
+    // 🟢 NEW: The pulsating Needs Review badge
+    if (status === 'pending_admin_approval') return <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 animate-pulse">Needs Review</Badge>;
+    
     if (status === 'processing') return <Badge variant="outline" className="text-yellow-400 border-yellow-500/20 animate-pulse">Processing...</Badge>;
     return <Badge variant="secondary" className="bg-slate-800 text-slate-400">Pending</Badge>;
 }

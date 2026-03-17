@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Package, Truck, CheckCircle, Clock, Search, Filter, Zap, ExternalLink, ShoppingBag, ArrowRight } from "lucide-react";
+import { Package, Truck, CheckCircle, Clock, Search, Filter, Zap, Tag, ShoppingBag, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,8 +93,9 @@ export default function DashboardOrders() {
             displayTitle = data.title;
             displayImage = data.thumbnail || data.image || data.designData?.previewImage;
             
-            // 🧮 USE THE TRUE PAYMENT TOTAL (which includes the anchored discount)
-            specificTotal = data.payment?.total ?? (price * qty); 
+            // 🧮 USE THE TRUE PAYMENT LEDGER TOTAL
+            const ledger = data.payment?.ledger || {};
+            specificTotal = ledger.finalPaidPrice ?? data.payment?.total ?? (price * qty); 
             
             const variantStr = data.variant ? `${data.variant.color || ''} ${data.variant.size || ''}` : 'Custom';
             itemDescription = `${displayTitle} (${variantStr}) x${qty}`;
@@ -112,8 +113,10 @@ export default function DashboardOrders() {
 
           return {
             id: data.orderId || doc.id,
+            groupId: data.groupId, // 🟢 Bring in the Group ID
             rawData: { id: doc.id, ...data },
-            referralDiscountApplied: data.referralDiscountApplied,
+            referralDiscountApplied: (data.payment?.ledger?.allocatedReferralDiscount || 0) > 0 || data.referralDiscountApplied,
+            bulkDiscountApplied: (data.payment?.ledger?.allocatedBulkDiscount || 0) > 0, // 🟢 Check if Bulk applied
             date: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "N/A",
             description: itemDescription,
             total: `${data.payment?.currency || data.currency || '$'} ${specificTotal.toFixed(2)}`,
@@ -254,12 +257,21 @@ export default function DashboardOrders() {
                 <Card className="overflow-hidden hover:bg-white/5 transition-colors cursor-pointer group bg-slate-800/40 backdrop-blur-md border border-white/10 shadow-lg">
                   <CardContent className="p-0">
                     <div className="flex flex-col sm:flex-row gap-5 p-5">
+                      
                       {/* Image & Info */}
                       <div className="flex items-start gap-4 flex-1">
-                        <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-xl bg-slate-700 overflow-hidden flex-shrink-0 border border-white/5 shadow-inner">
+                        <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-xl bg-slate-700 overflow-hidden flex-shrink-0 border border-white/5 shadow-inner relative">
                           <img src={order.image} alt="Order Item" className="h-full w-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
                         </div>
                         <div className="space-y-1.5 flex-1 min-w-0">
+                          
+                          {/* 🟢 NEW: Group ID Identifier */}
+                          {order.groupId && (
+                            <div className="text-[10px] font-medium text-slate-400 mb-0.5 flex items-center gap-1 uppercase tracking-wider">
+                              <Package className="w-3 h-3" /> Group #{order.groupId}
+                            </div>
+                          )}
+
                           <h3 className="font-bold text-lg text-white truncate flex items-center gap-2">
                             {t("orders.orderNumber")}{order.id}
                           </h3>
@@ -270,23 +282,34 @@ export default function DashboardOrders() {
                           </p>
                         </div>
                       </div>
+
                       {/* Status & Price */}
                       <div className="flex items-center justify-between sm:flex-col sm:items-end sm:justify-center sm:gap-2 mt-2 sm:mt-0 pt-4 sm:pt-0 border-t border-white/5 sm:border-0">
                         <Badge className={`px-3 py-1 text-xs font-medium border ${getStatusStyles(order.status)}`}>
                           {getStatusIcon(order.status)}
                           {order.status}
                         </Badge>
-                        <div className="flex flex-col gap-2 items-center">
+                        
+                        <div className="flex flex-col gap-2 items-center sm:items-end">
                           <span className="font-bold text-white text-lg">
                             {order.total}
                           </span>
 
-                          {/* 🎁 INJECT THE BADGE HERE */}
-                          {order.referralDiscountApplied && (
-                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full border border-orange-500/20">
-                              <Zap className="h-3 w-3" /> Reward Applied
-                            </span>
-                          )}
+                          {/* 🟢 DISCOUNT BADGE STACK */}
+                          <div className="flex flex-col items-end gap-1">
+                            {order.bulkDiscountApplied && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
+                                <Tag className="h-3 w-3" /> Bulk Savings
+                              </span>
+                            )}
+                            
+                            {order.referralDiscountApplied && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full border border-orange-500/20">
+                                <Zap className="h-3 w-3" /> Reward Applied
+                              </span>
+                            )}
+                          </div>
+
                         </div>
                       </div>
                     </div>

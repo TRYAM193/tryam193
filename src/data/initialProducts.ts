@@ -8,8 +8,8 @@ export const INITIAL_PRODUCTS = [
     title: "Men's Classic Premium Tee",
     category: "Men",
     image: 'https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/catalog%2Fmen-classic-tee?alt=media&token=eaffe62d-ccfa-4ea0-a9a9-4fb20312d00e',
-    model3d: "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/3dModels%2Ft-shirt.glb?alt=media&token=8ac80d94-daaf-4b0b-85e3-cd6128c53c3d",
-    description: "A timeless classic. Soft cotton, reliable fit.",
+    model3d: "/assets/t-shirt.glb",
+    description: "The T-shirt you'll reach for every single day. Crafted from soft premium cotton that feels light on your skin and strong enough for everyday life. Whether you're heading out with friends, chasing your goals, or just relaxing, this tee becomes a part of your story. Simple, timeless, and made for the person you are becoming.",
 
     print_areas: {
       front: { width: 4500, height: 5400 },
@@ -139,13 +139,95 @@ export const INITIAL_PRODUCTS = [
   },
 
   {
+    "id": "mens-polo-tee",
+    "title": "Men's Classic Polo T-Shirt",
+    "category": "Men",
+    "image": "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/catalog%2Fmens-polo-tee?alt=media&token=05f4d8cd-36b8-479b-b5cc-297d3776509f",
+    "model3d": null,
+    "description": "A refined classic that blends comfort with style. This polo tee is crafted from breathable premium cotton and finished with a structured collar for a clean, polished look. Perfect for workdays, casual outings, or everyday wear.",
+
+    "print_areas": {
+      "left_chest": { "width": 1500, "height": 1500 },
+      "right_chest": { "width": 1500, "height": 1500 },
+      "back": { "width": 4200, "height": 5200 }
+    },
+
+    "canvas_size": {
+      "left_chest": { "width": 300, "height": 300 },
+      "right_chest": { "width": 300, "height": 300 },
+      "back": { "width": 420, "height": 520 }
+    },
+
+    "price": {
+      "IN": 699,
+      "US": 29.99,
+      "GB": 24.99,
+      "EU": 26.99,
+      "CA": 39.99
+    },
+
+    "mockups": {
+      "front": "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/mockups%2Fmens-polo%2Fmens-polo-front.png?alt=media&token=161c63c1-2ce3-494e-b5f8-a5a88ca5dea0",
+      "back": "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/mockups%2Fmens-polo%2Fmens-polo-back.png?alt=media&token=5905e36b-5fe6-4b59-ae84-871c6d6c1c6b"
+    },
+
+    "print_area_2d": {
+      "left_chest": { "top": 30, "left": 29, "width": 20, "height": 20 },
+      "right_chest": { "top": 30, "left": 54, "width": 20, "height": 20 },
+      back: { top: 28, left: 29.5, width: 42, height: 49 }
+    },
+
+    "variants": {
+      "qikink": {
+        "colors": [
+          "Black",
+          "White",
+          "Navy Blue",
+          "Grey Melange",
+          "Maroon",
+          "Royal Blue",
+          "Mustard Yellow"
+        ],
+        "sizes": ["S", "M", "L", "XL", "XXL", "3XL"],
+        "sizeChart": {
+          "S": [38, 26],
+          "M": [40, 27],
+          "L": [42, 28],
+          "XL": [44, 29],
+          "XXL": [46, 30],
+          "3XL": [48, 31]
+        }
+      }, 
+    },
+
+    vendor_maps: {
+      qikink: {
+        // Base SKU for "Male Round Neck Half Sleeve"
+        product_id: "MPHs",
+        // Qikink Color Codes (Bk=Black, Wh=White, Nb=Navy Blue, Rd=Red, Rb=Royal Blue, Gm=Grey Melange)
+        color_map: {
+          "Black": "Bk", "White": "Wh", "Navy Blue": "Nb", "Grey Melange": "Gm", "Royal Blue": "Rb",
+           "Maroon": "Mn", "Mustard Yellow": "MYl"
+        }
+      },
+      printify: {
+        blueprint_id_pockets: 1984,      
+        print_provider_id_pockets: 217,   
+        
+        blueprint_id_back: 1402, 
+        print_provider_id_back: 39         
+      },
+    }
+  },
+
+  {
     id: "unisex-oversized-tee",
     title: "Unisex Streetwear Oversized Tee",
     category: "Unisex",
     image: 'https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/catalog%2Fmen-oversized-tee?alt=media&token=3dcae3b1-042e-417b-8557-90fd177123ae',
     image1: 'https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/catalog%2Fwomen-oversized-tee?alt=media&token=05ed8b7a-fbab-4394-a704-9f59ed435801',
     model3d: null,
-    description: "Heavyweight cotton with a boxy, dropped-shoulder fit.",
+    description: "Built for those who move differently. The oversized streetwear tee gives you freedom, comfort, and confidence in every step. With its relaxed drop-shoulder fit and premium heavyweight fabric, it feels as bold as your personality. Whether you're creating art, exploring the city, or just expressing yourself — this tee becomes your statement.",
 
     print_areas: {
       front: { width: 4500, height: 5400 },
@@ -242,7 +324,7 @@ export const INITIAL_PRODUCTS = [
     image: 'https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/catalog%2Fmen-hoodie?alt=media&token=eb24627e-f16e-4c09-b2a4-417c86fb2139',
     image1: 'https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/catalog%2Fwomen-hoodie?alt=media&token=788e59c3-a0d8-489c-8603-c731023a2f10',
     model3d: null,
-    description: "Cozy, durable, and perfect for layering.",
+    description: "More than just a hoodie — it's comfort you can carry everywhere. Warm, soft, and built for everyday adventures, this hoodie wraps you in a feeling of calm and confidence. Perfect for chilly mornings, late night drives, or quiet moments with music. Once you wear it, it becomes the hoodie you never want to take off.",
 
     print_areas: {
       front: { width: 4000, height: 4000 },
@@ -342,7 +424,7 @@ export const INITIAL_PRODUCTS = [
         product_id: "UHd",
         color_map: { "Black": "Bk", "White": "Wh", "Navy Blue": "Nb", "Grey Melange": "Gm", "Red": "Rd" }
       },
-      gelato: {       
+      gelato: {
         product_uid: "apparel_product_gca_hoodie_gsc_pullover_gcu_unisex_gqa_classic_gsi_{size}_gco_{color}_gpr_{print_code}_gildan_18500",
         color_map: { "Black": "black", "White": "white", "Navy Blue": "navy", "Grey Melange": "sport-grey", "Red": "red" }
       }
@@ -357,8 +439,8 @@ export const INITIAL_PRODUCTS = [
     title: "Women's Fitted Premium Tee",
     category: "Women",
     image: 'https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/catalog%2Fwomen-classic-tee?alt=media&token=ec5f29b8-03fc-4879-80f9-608b99adf197',
-    model3d: "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/3dModels%2Ft-shirt.glb?alt=media&token=8ac80d94-daaf-4b0b-85e3-cd6128c53c3d",
-    description: "A feminine cut with shorter sleeves and a subtle waist curve.",
+    model3d: "assets/t-shirt.glb",
+    description: "Designed to celebrate confidence and comfort. This fitted tee gently follows your natural shape while staying soft and breathable all day long. Whether you're dressing up your day or keeping it simple, it adds a touch of effortless style to every moment.",
 
     print_areas: {
       front: { width: 4000, height: 4800 },
@@ -464,8 +546,8 @@ export const INITIAL_PRODUCTS = [
     title: "Classic Ceramic Mug (11oz)",
     category: "Accessories",
     image: 'https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/catalog%2Fmug-ceramic-11oz?alt=media&token=7a07c2c7-78d6-4610-8e09-aee10ceb5bd1',
-    model3d: "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/3dModels%2Fmug.glb?alt=media&token=e2c6cffb-132d-4a2c-84ab-0f239e8aa11a",
-    description: "Durable ceramic mug with high-quality printing.",
+    model3d: "assets/mug.glb",
+    description: "Every great day begins with a warm cup and a moment to yourself. This classic ceramic mug turns your coffee or tea into a daily ritual worth enjoying. Strong, elegant, and perfect for your favorite design — it's not just a mug, it's a small piece of comfort in your everyday life.",
 
     print_areas: {
       front: { width: 2700, height: 1100 }
@@ -535,8 +617,8 @@ export const INITIAL_PRODUCTS = [
     title: "Eco Canvas Tote Bag",
     category: "Accessories",
     image: 'https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/catalog%2Ftote-bag-canvas?alt=media&token=bd508609-096a-443c-a6a1-196390ceefdc',
-    model3d: "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/3dModels%2Ftote.glb?alt=media&token=71441506-008c-4ebf-aa13-23119b8ac577",
-    description: "Heavy duty canvas tote for daily use.",
+    model3d: "assets/tote.glb",
+    description: "Carry your world with style and purpose. This eco-friendly canvas tote is strong enough for your daily essentials and simple enough to match every outfit. From grocery runs to college days or weekend outings, it becomes the bag that travels everywhere with you.",
 
     print_areas: {
       front: { width: 3000, height: 3000 },

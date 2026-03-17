@@ -25,6 +25,8 @@ import { OrderSuccessOverlay } from "@/components/OrderSuccessOverlay"; // Adjus
 import { AnimatePresence, motion } from "framer-motion"; // Ensure this is imported
 import { toast } from 'sonner';
 import { Switch } from "@/components/ui/switch";
+// 🟢 NEW MATH IMPORTS
+import { calculateCartTotalsAndAllocations, getVolumeDiscount } from "@/lib/discountUtils";
 
 // Icons
 import {
@@ -39,10 +41,9 @@ import {
   CheckCircle2,
   MapPin,
   AlertCircle,
-  Sparkles, Zap, XCircle
+  Sparkles, Zap, XCircle, Tag
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { calculatePriceDetails } from "@/lib/priceUtils";
 import { PriceDisplay } from "@/components/PriceDisplay";
 
 const StripeCheckoutForm = ({ clientSecret, shippingInfo, onSuccess, onError }: any) => {
@@ -55,7 +56,6 @@ const StripeCheckoutForm = ({ clientSecret, shippingInfo, onSuccess, onError }: 
     if (!stripe || !elements) return;
     setProcessing(true);
 
-    // Modern Stripe Confirmation for PaymentElement
     const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
@@ -66,7 +66,7 @@ const StripeCheckoutForm = ({ clientSecret, shippingInfo, onSuccess, onError }: 
           }
         }
       },
-      redirect: 'if_required' // Prevents Stripe from navigating away from your React app
+      redirect: 'if_required' 
     });
 
     if (error) {
@@ -93,7 +93,7 @@ export default function OrderCheckoutPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  // Inside your component...
+  
   const [showSuccess, setShowSuccess] = useState(false);
   const { items: cartItems, cartTotal, clearCart } = useCart();
 
@@ -109,55 +109,31 @@ export default function OrderCheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('online');
 
   const [showVerifyModal, setShowVerifyModal] = useState(false);
-  const [isPhoneVerified, setIsPhoneVerified] = useState(false); // Local state fallback
+  const [isPhoneVerified, setIsPhoneVerified] = useState(false); 
   const [paymentFailed, setPaymentFailed] = useState(false);
   const [failureReason, setFailureReason] = useState("");
-
-  const [isCODAvailable, setIsCODAvailable] = useState(true)
-  // Regex for Indian GSTIN
   const GST_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
   const [gstError, setGstError] = useState("");
 
   const stripeCurrencyMap: Record<string, string> = {
-    US: 'usd',
-    GB: 'gbp',
-    DE: 'eur',
-    FR: 'eur',
-    IT: 'eur',
-    ES: 'eur',
-    NL: 'eur',
-    CA: 'cad'
+    US: 'usd', GB: 'gbp', DE: 'eur', FR: 'eur', IT: 'eur', ES: 'eur', NL: 'eur', CA: 'cad'
   }
 
-  const checkoutAnalysis = items.reduce((acc, item) => {
-    const { originalPrice, savings } = calculatePriceDetails(item.price, item.productId);
-    acc.totalMRP += (originalPrice * item.quantity);
-    acc.totalSavings += (savings * item.quantity);
-    return acc;
-  }, { totalMRP: 0, totalSavings: 0 });
+  // 🟢 NEW: MASTER MATH ENGINE (Calculates Ledger and UI Gamification)
+  const isRewardValid = applyReward && hasActiveReward;
+  const { summary, allocatedItems } = useMemo(() => {
+    return calculateCartTotalsAndAllocations(items, isRewardValid);
+  }, [items, isRewardValid]);
+  
+  const { discountPct, message, progress, color, bgProgress } = getVolumeDiscount(summary.totalItems || 0);
 
-
-  // Check verification on load (From User Profile)
-  useEffect(() => {
-    async function checkVerification() {
-      if (!user) return;
-      const userRef = doc(db, "users", user.uid);
-      const snap = await getDoc(userRef);
-      if (snap.exists() && snap.data().phoneVerified) {
-        setIsPhoneVerified(true);
-      }
-    }
-    checkVerification();
-  }, [user]);
-  // 🔒 Location Lock State
   const [isLocationLocked, setIsLocationLocked] = useState(false);
-
   const [stripePromise, setStripePromise] = useState<any>(null);
   const [stripeClientSecret, setStripeClientSecret] = useState('');
   const [showStripeModal, setShowStripeModal] = useState(false);
   const [pendingOrderId, setPendingOrderId] = useState('');
-  const email = user?.email
-  // Shipping State
+  const email = user?.email;
+  
   const [shippingInfo, setShippingInfo] = useState({
     fullName: user?.displayName || '',
     email: user?.email ? user.email : email,
@@ -173,15 +149,14 @@ export default function OrderCheckoutPage() {
   });
 
   useEffect(() => {
-    if (email) setShippingInfo({ ...shippingInfo, email: user.email })
-  }, [user])
+    if (email) setShippingInfo(prev => ({ ...prev, email: user.email }));
+  }, [user]);
 
   // 1. Fetch Items & User Profile
   useEffect(() => {
     const initData = async () => {
       setLoadingItems(true);
 
-      // Load Cart/Items
       if (mode === 'direct') {
         const directItem = localStorage.getItem('directBuyItem');
         if (directItem) setItems([JSON.parse(directItem)]);
@@ -194,7 +169,6 @@ export default function OrderCheckoutPage() {
         } catch (err) { console.error(err); }
       }
 
-      // Load Saved Address
       if (user?.uid) {
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
@@ -208,10 +182,8 @@ export default function OrderCheckoutPage() {
               ...prev,
               fullName: data.name || prev.fullName,
               line1: addr.line1 || '',
-              // We will override this below if IP check passes
               countryCode: addr.countryCode || 'IN',
-              country: addr.country || resolvedCountry || 'India', // ✅ Load or Resolve
-
+              country: addr.country || resolvedCountry || 'India',
               stateCode: addr.stateCode || '',
               state: addr.state || resolvedState || '',
               city: addr.city || '',
@@ -221,29 +193,30 @@ export default function OrderCheckoutPage() {
           }
         } catch (err) { console.error(err); }
       }
-
       setLoadingItems(false);
     };
     initData();
   }, [mode, user, legacyOrderData]);
 
-  // ---------------------------------------------------------
-  // ✅ UNIVERSAL SUCCESS HANDLER (Updates DB Client-Side)
-  // ---------------------------------------------------------
+  useEffect(() => {
+    async function checkVerification() {
+      if (!user) return;
+      const userRef = doc(db, "users", user.uid);
+      const snap = await getDoc(userRef);
+      if (snap.exists() && snap.data().phoneVerified) {
+        setIsPhoneVerified(true);
+      }
+    }
+    checkVerification();
+  }, [user]);
+
   const handlePaymentSuccess = async (txnId: string) => {
     setIsProcessing(true);
     try {
-      // 🛑 We NO LONGER update the database here!
-      // The secure Razorpay/Stripe webhooks in the backend will mark it 'paid'
       console.log(`Payment authorized (Txn: ${txnId}). Awaiting backend webhook verification.`);
-
-      // 1. Clean up the modals and cart
       setShowStripeModal(false);
       clearCart();
-
-      // 2. Trigger the celebration overlay (which auto-redirects after 3 seconds!)
       setShowSuccess(true);
-
     } catch (error) {
       console.error("Success handling failed:", error);
       navigate('/dashboard/orders');
@@ -252,38 +225,6 @@ export default function OrderCheckoutPage() {
     }
   };
 
-  // // 2. 🌍 IP Geolocation & Restriction Logic
-  // useEffect(() => {
-  //   // Only fetch if we haven't locked it yet
-  //   const fetchLocation = async () => {
-  //     try {
-  //       const res = await fetch('https://ipapi.co/json/');
-  //       const data = await res.json();
-
-  //       // Logic: If user is in India, Force India.
-  //       // You can add 'OR data.country_code === "US"' if you want to lock US users too.
-  //       if (data.country_code === 'IN') {
-  //         setShippingInfo(prev => ({
-  //           ...prev,
-  //           countryCode: 'IN',
-  //           country: 'India', // ✅ Explicitly set name
-
-  //           // Only clear state if we switched countries
-  //           stateCode: prev.countryCode !== 'IN' ? '' : prev.stateCode,
-  //           state: prev.countryCode !== 'IN' ? '' : prev.state,
-  //           city: prev.countryCode !== 'IN' ? '' : prev.city
-  //         }));
-  //         setIsLocationLocked(true);
-  //       }
-  //     } catch (error) {
-  //       console.warn("Could not fetch IP location, defaulting to open selection.");
-  //     }
-  //   };
-
-  //   // fetchLocation();
-  // }, []);
-
-  // --- LOCATION LIBRARIES ---
   const countries = useMemo(() => {
     const allowedCodes = ['IN', 'US', 'GB', 'CA'];
     return Country.getAllCountries().filter(c => allowedCodes.includes(c.isoCode));
@@ -307,55 +248,44 @@ export default function OrderCheckoutPage() {
     });
   };
 
-  // Currency Logic
   const currencySymbol = shippingInfo.countryCode === 'US' ? "$" : (shippingInfo.countryCode === 'GB' ? "£" : (['DE', 'FR', 'IT', 'ES', 'NL'].includes(shippingInfo.countryCode) ? "€" : (shippingInfo.countryCode === 'CA') ? "C$" : "₹"));
-  const basePayAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const isRewardValid = applyReward && hasActiveReward;
-  const totalPayAmount = isRewardValid ? Math.max(0, basePayAmount - 100) : basePayAmount;
+  
+ // 🟢 Use the secure Math summary for the final checkouts
+  const totalPayAmount = summary.finalGrandTotal;
+  const basePayAmount = summary.mrpSubtotal;
 
-  if (totalPayAmount >= 3000) setIsCODAvailable(false)
+  // ✅ FIX: Derive COD availability instantly without causing a re-render loop
+  const isCODAvailable = totalPayAmount < 3000;
 
-  // Handlers
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setShippingInfo({ ...shippingInfo, [e.target.name]: e.target.value });
   };
 
   const handleCountryChange = (value: string) => {
-    // 1. Find the Name object from the library
     const countryData = Country.getCountryByCode(value);
-
     setShippingInfo({
       ...shippingInfo,
       countryCode: value,
-      country: countryData?.name || value, // ✅ Save Name
-
-      // Reset State/City when country changes
-      stateCode: '',
-      state: '',
-      city: ''
+      country: countryData?.name || value,
+      stateCode: '', state: '', city: ''
     });
   }
   const handleStateChange = (value: string) => {
-    // 1. Find the Name object
     const stateData = State.getStateByCodeAndCountry(value, shippingInfo.countryCode);
-
     setShippingInfo({
       ...shippingInfo,
       stateCode: value,
-      state: stateData?.name || value, // ✅ Save Name
+      state: stateData?.name || value,
       city: ''
     });
   };
   const handleCityChange = (value: string) => setShippingInfo({ ...shippingInfo, city: value });
 
   const handlePlaceOrder = async () => {
-    if (items.length === 0) return;
+    if (allocatedItems.length === 0) return;
     if (!shippingInfo.line1 || !shippingInfo.city || !shippingInfo.stateCode) {
       alert("Address incomplete."); return;
     }
-    // if (!isPhoneVerified) {
-    //   setShowVerifyModal(true); return;
-    // }
 
     if (shippingInfo.countryCode === 'IN' && shippingInfo.gstNumber) {
       if (!GST_REGEX.test(shippingInfo.gstNumber)) {
@@ -374,21 +304,17 @@ export default function OrderCheckoutPage() {
         return `ORD${timestamp}${random}`;
       };
 
-      // 🛑 CRITICAL FIX: Reuse the existing Group ID if they are retrying a failed payment
       const checkoutGroupId = pendingOrderId || generateCompactId();
-      
-      // Save it to state so we remember it on the next click
       if (!pendingOrderId) {
         setPendingOrderId(checkoutGroupId);
       }
 
       const createdOrderIds: string[] = [];
-      const orderDocsPayload: any[] = []; // We keep this to send to the invoice function later
+      const orderDocsPayload: any[] = []; 
 
-      // 1. CREATE SPLIT ORDERS (One per Item Line)
-      const promises = items.map(async (cartItem, index) => {
+      // 🟢 CRITICAL: We now loop over the ALLOCATED ITEMS array
+      const promises = allocatedItems.map(async (cartItem, index) => {
 
-        // 1. Enrich
         const masterProduct = INITIAL_PRODUCTS.find(p => p.id === cartItem.productId);
         const enrichedItem = {
           ...cartItem,
@@ -396,7 +322,6 @@ export default function OrderCheckoutPage() {
           print_areas: masterProduct?.print_areas || { front: { width: 4500, height: 5400 } }
         };
 
-        // 2. IDs & Provider
         const orderId = `${checkoutGroupId}${index + 1}`;
         createdOrderIds.push(orderId);
 
@@ -404,18 +329,10 @@ export default function OrderCheckoutPage() {
         if (shippingInfo.countryCode === 'IN') provider = 'qikink';
         if (shippingInfo.countryCode === 'US' || shippingInfo.countryCode === 'CA') provider = 'printful';
 
-        // 🧮 3. NEW MATH: Anchor the discount to the FIRST item only
-        const isFirstItem = index === 0;
-        const appliesToThisItem = isRewardValid && isFirstItem;
+        // 🟢 NEW: Pull the perfectly calculated immutable ledger for this specific item
+        const ledger = cartItem.ledger;
 
-        // Calculate what THIS specific item costs
-        const itemBasePrice = cartItem.price * cartItem.quantity;
-        // If it's the anchor item, deduct the ₹100 from its total
-        const itemFinalPrice = appliesToThisItem ? Math.max(0, itemBasePrice - 100) : itemBasePrice;
-
-        // 4. FLATTENED PAYLOAD
         const orderPayload = {
-          // A. Order Meta
           orderId: orderId,
           groupId: checkoutGroupId,
           userId: user?.uid || 'guest',
@@ -424,15 +341,16 @@ export default function OrderCheckoutPage() {
           provider,
           shippingAddress: shippingInfo,
 
-          // 🎁 ONLY the first item gets the true flag!
-          referralDiscountApplied: appliesToThisItem,
+          // 🎁 We flag the first item so the webhook knows to reset the reward for the user
+          referralDiscountApplied: isRewardValid && index === 0,
 
           payment: {
             method: paymentMethod,
-            total: itemFinalPrice,        // 👈 What THIS specific split-order costs
-            cartTotal: totalPayAmount,    // 👈 Keeping the overall cart total for reference
+            total: ledger.finalPaidPrice,      // 👈 Securely derived from the math engine
+            cartTotal: summary.finalGrandTotal,
             currency: currencySymbol,
-            status: paymentMethod === 'cod' ? 'pending_cod' : 'pending'
+            status: paymentMethod === 'cod' ? 'pending_cod' : 'pending',
+            ledger: ledger                     // 👈 Save the full financial breakdown to the DB!
           },
           ...enrichedItem
         };
@@ -442,29 +360,25 @@ export default function OrderCheckoutPage() {
       });
 
       await Promise.all(promises);
-      setPendingOrderId(checkoutGroupId); // We track Group ID now, not single Order ID
+      setPendingOrderId(checkoutGroupId); 
 
       // ---------------------------------------------------------
       // 2. PAYMENT FLOWS
       // ---------------------------------------------------------
-
-      // A. CASH ON DELIVERY (India)
       if (paymentMethod === 'cod') {
         clearCart();
         setShowSuccess(true);
       }
-
-      // B. RAZORPAY (India Online)
       else if (shippingInfo.countryCode === 'IN') {
         const loaded = await loadRazorpay();
         if (!loaded) throw new Error("Razorpay failed");
 
         const createRzpOrder = httpsCallable(functions, 'createRazorpayOrder');
         const { data }: any = await createRzpOrder({ 
-          amount: basePayAmount, 
+          amount: summary.finalGrandTotal, // 🟢 Use safe summary
           currency: 'INR', 
           applyReferralReward: isRewardValid,
-          groupId: checkoutGroupId // 👈 Pass the Group ID to the backend
+          groupId: checkoutGroupId
         });
 
         const options = {
@@ -475,7 +389,6 @@ export default function OrderCheckoutPage() {
           description: "Custom T-Shirt Order",
           order_id: data.orderId,
           handler: async function (response: any) {
-            // ✅ SUCCESS
             setIsProcessing(false);
             setShowSuccess(true);
             setTimeout(() => {
@@ -490,7 +403,6 @@ export default function OrderCheckoutPage() {
           theme: { color: "#ea580c" },
           modal: {
             ondismiss: function () {
-              // 🔴 USER CLOSED THE POPUP
               setIsProcessing(false);
               setFailureReason("Payment was cancelled. You have not been charged.");
               setPaymentFailed(true);
@@ -500,7 +412,6 @@ export default function OrderCheckoutPage() {
 
         const rzp = new (window as any).Razorpay(options);
 
-        // 🔴 BANK DECLINED / TIMEOUT / WRONG OTP
         rzp.on('payment.failed', function (response: any) {
           setIsProcessing(false);
           setFailureReason(response.error.description || "Payment failed. Please try again.");
@@ -510,12 +421,10 @@ export default function OrderCheckoutPage() {
         rzp.open();
         setIsProcessing(false);
       }
-
-      // C. STRIPE (International)
       else {
         const createStripe = httpsCallable(functions, 'createStripeIntent');
         const { data }: any = await createStripe({
-          amount: basePayAmount,
+          amount: summary.finalGrandTotal, // 🟢 Use safe summary
           currency: stripeCurrencyMap[shippingInfo.countryCode] || 'usd',
           groupId: checkoutGroupId,
           applyReferralReward: isRewardValid
@@ -534,7 +443,6 @@ export default function OrderCheckoutPage() {
     }
   };
 
-  // C. Stripe Success Handler
   const handleStripeSuccess = async (txnId: string) => {
     await handlePaymentSuccess(txnId);
   };
@@ -545,7 +453,6 @@ export default function OrderCheckoutPage() {
       <p className="text-slate-400">Loading checkout...</p>
     </div>
   );
-
 
   return (
     <div className="min-h-screen relative pb-20 font-sans bg-[#0f172a] text-slate-100 selection:bg-orange-500/30">
@@ -562,7 +469,6 @@ export default function OrderCheckoutPage() {
         )}
       </AnimatePresence>
 
-      {/* Background */}
       <div className="fixed inset-0 -z-10 w-full h-full bg-[#0f172a]">
         <div className="absolute top-0 right-0 w-[50%] h-[50%] rounded-full bg-blue-600/5 blur-[120px]" />
         <div className="absolute bottom-0 left-0 w-[50%] h-[50%] rounded-full bg-orange-600/5 blur-[100px]" />
@@ -576,7 +482,6 @@ export default function OrderCheckoutPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
 
           <div className="lg:col-span-2 space-y-6">
-            {/* SHIPPING DETAILS */}
             <Card className="bg-slate-800/40 backdrop-blur-md border border-white/10 shadow-lg">
               <CardHeader className="border-b border-white/5 pb-4">
                 <CardTitle className="text-white text-lg flex items-center gap-2">
@@ -588,7 +493,6 @@ export default function OrderCheckoutPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label className="text-slate-300">Full Name</Label>
-                    {/* ✅ Added text-white to all Inputs */}
                     <Input name="fullName" value={shippingInfo.fullName} onChange={handleInputChange} className="bg-slate-900/50 border-white/10 text-white focus:border-orange-500/50" />
                   </div>
                   <div className="space-y-1.5">
@@ -608,16 +512,8 @@ export default function OrderCheckoutPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-slate-300 flex items-center justify-between">
-                      Country
-                    </Label>
-
-                    {/* 🔒 Locked Select if isLocationLocked is true */}
-                    <Select
-                      value={shippingInfo.countryCode}
-                      onValueChange={handleCountryChange}
-                    // disabled={isLocationLocked}
-                    >
+                    <Label className="text-slate-300 flex items-center justify-between">Country</Label>
+                    <Select value={shippingInfo.countryCode} onValueChange={handleCountryChange}>
                       <SelectTrigger className={`bg-slate-900/50 border-white/10 text-white ${isLocationLocked ? "opacity-50 cursor-not-allowed" : ""} `}>
                         <SelectValue placeholder="Select Country" />
                       </SelectTrigger>
@@ -668,7 +564,6 @@ export default function OrderCheckoutPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-slate-400 text-xs uppercase font-bold tracking-wider">GSTIN (Optional)</Label>
-                      {/* 🔴 ERROR INDICATOR */}
                       {gstError && (
                         <span className="text-red-400 text-xs flex items-center gap-1 animate-pulse">
                           <AlertCircle className="h-3 w-3" /> {gstError}
@@ -681,9 +576,8 @@ export default function OrderCheckoutPage() {
                       onChange={(e) => {
                         const val = e.target.value.toUpperCase().replace(/\s/g, '');
                         setShippingInfo({ ...shippingInfo, gstNumber: val });
-                        if (gstError) setGstError(""); // Clear error on type
+                        if (gstError) setGstError(""); 
                       }}
-                      // 🔴 RED BORDER IF ERROR
                       className={`bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus:border-orange-500/50 ${gstError ? "border-red-500 focus:border-red-500" : ""}`}
                       maxLength={15}
                     />
@@ -692,7 +586,6 @@ export default function OrderCheckoutPage() {
               </CardContent>
             </Card>
 
-            {/* PAYMENT METHOD */}
             <Card className="bg-slate-800/40 backdrop-blur-md border border-white/10 shadow-lg overflow-hidden">
               <CardHeader className="border-b border-white/5 pb-4 bg-slate-900/20">
                 <div className="flex items-center justify-between">
@@ -706,7 +599,6 @@ export default function OrderCheckoutPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-4 sm:p-6 space-y-4">
-                {/* Pay Online */}
                 <div onClick={() => setPaymentMethod('online')} className={`relative p-5  min-h-[120px] border rounded-xl cursor-pointer transition-all duration-200 group ${paymentMethod === 'online' ? 'border-orange-500 bg-gradient-to-br from-orange-500/10 to-transparent ring-1 ring-orange-500/50' : 'border-white/10 hover:bg-white/5 hover:border-white/20'}`}>
                   <div className="flex items-start gap-4">
                     <div className={`p-3 rounded-xl transition-colors ${paymentMethod === 'online' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'bg-slate-800 text-slate-400'}`}>
@@ -726,7 +618,6 @@ export default function OrderCheckoutPage() {
                     </div>
                   </div>
                 </div>
-                {/* COD */}
                 {isCODAvailable &&
                   <div onClick={() => setPaymentMethod('cod')} className={`relative p-5 border rounded-xl cursor-pointer transition-all duration-200 ${paymentMethod === 'cod' ? 'border-orange-500 bg-gradient-to-br from-orange-500/10 to-transparent ring-1 ring-orange-500/50' : 'border-white/10 hover:bg-white/5 hover:border-white/20'}`}>
                     <div className="flex items-center gap-4">
@@ -746,7 +637,6 @@ export default function OrderCheckoutPage() {
             </Card>
           </div>
 
-          {/* SUMMARY */}
           <div className="lg:col-span-1">
             <Card className="lg:sticky lg:top-6 border-white/10 bg-slate-800/60 backdrop-blur-xl shadow-2xl">
               <CardHeader className="border-b border-white/5 pb-4 bg-slate-900/30">
@@ -755,27 +645,52 @@ export default function OrderCheckoutPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
+
+                {/* 🟢 NEW: THE GAMIFICATION PROGRESS BAR */}
+                {items.length > 0 && (
+                    <div className="mb-6 flex flex-col gap-3 p-4 rounded-xl border border-orange-500/20 bg-orange-500/5 shadow-inner">
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center text-sm font-medium">
+                                <span className={`flex items-center gap-1.5 ${color}`}>
+                                    {discountPct > 0 ? <Sparkles size={16} /> : <Tag size={16} />}
+                                    {message}
+                                </span>
+                                {discountPct > 0 && (
+                                    <span className="text-green-400 font-bold animate-pulse">-{discountPct * 100}% Off!</span>
+                                )}
+                            </div>
+                            <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                                <div 
+                                    className={`h-full transition-all duration-500 ease-out ${bgProgress}`} 
+                                    style={{ width: `${progress}%` }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="space-y-4 mb-6 max-h-48 sm:max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                  {items.map((item, idx) => (
+                  {/* 🟢 Render from allocatedItems to ensure Ledger accuracy */}
+                  {allocatedItems.map((item, idx) => (
                     <div key={idx} className="flex gap-4 border-b border-white/5 pb-4 last:border-0 last:pb-0">
                       <div className="h-14 w-14 rounded-lg overflow-hidden border border-white/10 shrink-0">
                         <img src={item.thumbnail} alt="Preview" className="w-full h-full object-contain" />
                       </div>
-                      {/* Inside the items.map loop */}
                       <div className="flex-1 min-w-0 flex flex-col justify-center">
                         <h4 className="font-medium text-slate-200 text-sm truncate">{item.productTitle}</h4>
-
-                        {/* NEW PRICE DISPLAY */}
-                        <div className="flex justify-between mt-1">
+                        
+                        {/* 🟢 RESTORED: PriceDisplay showing MRP vs Our Price (Qty * Base Price) */}
+                        <div className="flex justify-between mt-1 items-center">
                           <span className="text-xs text-slate-400">Qty: {item.quantity}</span>
                           <PriceDisplay
-                            price={item.price * item.quantity}
+                            price={item.ledger.lineTotal} // Safe math: Base Price * Qty
                             currency={currencySymbol}
                             productId={item.productId}
                             size="sm"
                             align="right"
                           />
                         </div>
+                        
                       </div>
                     </div>
                   ))}
@@ -783,7 +698,6 @@ export default function OrderCheckoutPage() {
 
                 <Separator className="bg-white/10 my-4" />
 
-                {/* 🎁 REWARD TOGGLE (Only for Direct Mode) */}
                 {mode === 'direct' && hasActiveReward && (
                   <div className="flex items-center justify-between p-3 mb-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-xl shadow-[0_0_15px_rgba(234,88,12,0.1)]">
                     <div className="flex items-center gap-3">
@@ -805,21 +719,24 @@ export default function OrderCheckoutPage() {
                   </div>
                 )}
 
+                {/* 🟢 NEW: TRANSPARENT MACRO RECEIPT TOTALS */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm text-slate-400">
-                    <span>Total MRP</span>
-                    <span className="line-through">{currencySymbol}{checkoutAnalysis.totalMRP.toFixed(2)}</span>
+                    <span>Subtotal ({summary.totalItems} items)</span>
+                    <span>{currencySymbol}{summary.mrpSubtotal.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-sm text-green-400 font-medium">
-                    <span>Discount</span>
-                    <span>-{currencySymbol}{checkoutAnalysis.totalSavings.toFixed(2)}</span>
-                  </div>
+                  
+                  {summary.totalBulkDiscount > 0 && (
+                    <div className="flex justify-between text-sm text-green-400 font-medium">
+                      <span>Bulk Savings ({discountPct * 100}%)</span>
+                      <span>-{currencySymbol}{summary.totalBulkDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
 
-                  {/* 🎁 REWARD LINE ITEM */}
-                  {isRewardValid && (
+                  {summary.totalReferralDiscount > 0 && (
                     <div className="flex justify-between text-sm text-orange-400 font-bold">
                       <span>Referral Reward</span>
-                      <span>-{currencySymbol}100.00</span>
+                      <span>-{currencySymbol}{summary.totalReferralDiscount.toFixed(2)}</span>
                     </div>
                   )}
 
@@ -827,25 +744,24 @@ export default function OrderCheckoutPage() {
                     <span>Shipping</span>
                     <span className="text-green-400">Free</span>
                   </div>
-
-                  <div className="flex justify-between text-sm text-slate-400">
-                    <span>Incl. of Tax</span>
-                  </div>
-
-                  <Separator className="bg-white/10 my-2" />
-
-                  <div className="flex justify-between text-xl font-bold text-white">
-                    <span>Total</span>
-                    <span>{currencySymbol}{totalPayAmount.toFixed(2)}</span>
-                  </div>
-
-                  {/* SAVINGS BADGE */}
-                  <div className="mt-3 flex items-center justify-center gap-2 text-xs font-bold text-green-400 bg-green-500/10 py-2 rounded border border-green-500/20">
-                    <Sparkles className="h-3 w-3" /> You saved {currencySymbol}{checkoutAnalysis.totalSavings.toFixed(2)}!
-                  </div>
                 </div>
+
+                <Separator className="bg-white/10 my-4" />
+
+                <div className="flex justify-between text-xl font-bold text-white">
+                  <span>Total</span>
+                  <span className="text-orange-400">{currencySymbol}{summary.finalGrandTotal.toFixed(2)}</span>
+                </div>
+
+                {/* SAVINGS BADGE */}
+                {(summary.totalBulkDiscount > 0 || summary.totalReferralDiscount > 0) && (
+                  <div className="mt-3 flex items-center justify-center gap-2 text-xs font-bold text-green-400 bg-green-500/10 py-2 rounded border border-green-500/20">
+                    <Sparkles className="h-3 w-3" /> You saved {currencySymbol}{(summary.totalBulkDiscount + summary.totalReferralDiscount).toFixed(2)}!
+                  </div>
+                )}
+
                 <div className="hidden lg:block">
-                  <Button onClick={handlePlaceOrder} disabled={isProcessing} className="w-full mt-6 h-14 sm:h-12 text-base sm:text-lg font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 font-bold shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.02]">
+                  <Button onClick={handlePlaceOrder} disabled={isProcessing || items.length === 0} className="w-full mt-6 h-14 sm:h-12 text-base sm:text-lg font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.02]">
                     {isProcessing ? <><Loader2 className="animate-spin mr-2 h-5 w-5" /> Processing...</> : (paymentMethod === 'cod' ? 'Place Order' : `Pay ${currencySymbol}${totalPayAmount.toFixed(2)}`)}
                   </Button>
                 </div>
@@ -880,51 +796,21 @@ export default function OrderCheckoutPage() {
           </div>
         </div>
       </div>
-      {/* 📱 Mobile Sticky Pay Bar */}
-      {/* 📱 Mobile Glass Pay Bar */}
+
       <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden">
-        <div
-          className="
-      bg-white/5
-      backdrop-blur-2xl
-      border-t border-white/10
-      shadow-[0_-8px_40px_rgba(0,0,0,0.6)]
-    "
-        >
+        <div className="bg-white/5 backdrop-blur-2xl border-t border-white/10 shadow-[0_-8px_40px_rgba(0,0,0,0.6)]">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-
-            {/* 💰 Price Info */}
             <div className="flex flex-col leading-tight">
-              <span className="text-[11px] uppercase tracking-widest text-slate-400">
-                Total
-              </span>
-              <span className="text-lg font-bold text-white">
-                {currencySymbol}{totalPayAmount.toFixed(2)}
-              </span>
+              <span className="text-[11px] uppercase tracking-widest text-slate-400">Total</span>
+              <span className="text-lg font-bold text-white">{currencySymbol}{totalPayAmount.toFixed(2)}</span>
             </div>
-
-            {/* 🔥 Pay Button */}
             <Button
               onClick={handlePlaceOrder}
-              disabled={isProcessing}
-              className="
-          h-12 px-6 text-base font-bold rounded-2xl
-          bg-gradient-to-r from-orange-600 to-red-600
-          hover:from-orange-500 hover:to-red-500
-          shadow-lg shadow-orange-900/40
-          transition-all duration-200
-          hover:scale-[1.02]
-        "
+              disabled={isProcessing || items.length === 0}
+              className="h-12 px-6 text-base font-bold rounded-2xl bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-900/40 transition-all duration-200 hover:scale-[1.02]"
             >
-              {isProcessing ? (
-                <Loader2 className="animate-spin h-5 w-5" />
-              ) : paymentMethod === "cod" ? (
-                "Place Order"
-              ) : (
-                "Pay Now"
-              )}
+              {isProcessing ? <Loader2 className="animate-spin h-5 w-5" /> : paymentMethod === "cod" ? "Place Order" : "Pay Now"}
             </Button>
-
           </div>
         </div>
       </div>
@@ -942,40 +828,21 @@ export default function OrderCheckoutPage() {
       {paymentFailed && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
           <div className="bg-slate-900 border border-red-500/30 rounded-2xl shadow-2xl shadow-red-900/20 max-w-sm w-full p-8 text-center flex flex-col items-center relative overflow-hidden">
-            {/* Background Glow */}
             <div className="absolute -top-10 -right-10 w-32 h-32 bg-red-500/10 rounded-full blur-[40px]" />
             <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-orange-500/10 rounded-full blur-[40px]" />
-
-            {/* Icon */}
             <div className="relative w-20 h-20 mb-6 flex items-center justify-center">
               <div className="absolute inset-0 bg-red-500/20 rounded-full animate-ping" style={{ animationDuration: '3s' }} />
               <div className="relative bg-slate-800 rounded-full p-4 border-2 border-red-500/50">
                 <XCircle className="w-10 h-10 text-red-500" />
               </div>
             </div>
-
-            {/* Text */}
             <h2 className="text-2xl font-extrabold text-white mb-2 tracking-tight">Payment Failed</h2>
-            <p className="text-slate-400 text-sm mb-8 leading-relaxed">
-              {failureReason}
-            </p>
-
-            {/* Actions */}
+            <p className="text-slate-400 text-sm mb-8 leading-relaxed">{failureReason}</p>
             <div className="flex flex-col gap-3 w-full relative z-10">
-              <Button
-                onClick={() => setPaymentFailed(false)}
-                className="w-full h-12 text-base font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg text-white rounded-xl border-0"
-              >
+              <Button onClick={() => setPaymentFailed(false)} className="w-full h-12 text-base font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg text-white rounded-xl border-0">
                 Try Again
               </Button>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setPaymentFailed(false);
-                  navigate('/cart');
-                }}
-                className="w-full h-12 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl"
-              >
+              <Button variant="ghost" onClick={() => { setPaymentFailed(false); navigate('/cart'); }} className="w-full h-12 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl">
                 Back to Cart
               </Button>
             </div>
@@ -985,5 +852,3 @@ export default function OrderCheckoutPage() {
     </div>
   );
 }
-
-// ${isLocationLocked ? "opacity-50 cursor-not-allowed" : ""}

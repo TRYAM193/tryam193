@@ -5,7 +5,7 @@ import { db } from "@/firebase";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Paintbrush, ChevronRight, Check, Truck, Star, ShieldCheck, Globe, Sparkles } from "lucide-react";
+import { Loader2, Paintbrush, ChevronRight, Check, Truck, Star, ShieldCheck, Globe, Sparkles, Droplets, Wind, Palette, Shield, ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { COLOR_MAP } from "@/lib/colorMaps";
@@ -75,7 +75,7 @@ export default function ProductDetails() {
 
     // Reviews
     const [reviews, setReviews] = useState<any[]>([])
-    const [reviewsLoading, setReviewsLoading] = useState(true)
+    const [reviewsLoading, setReviewsLoading] = useState(false)
 
     const [showReviewModal, setShowReviewModal] = useState(false)
     const [rating, setRating] = useState(0)
@@ -83,6 +83,7 @@ export default function ProductDetails() {
     const [comment, setComment] = useState("")
     const [aiLoading, setAiLoading] = useState(false)
     const [autoReviewCount, setAutoReviewCount] = useState(0)
+    const [isDescExpanded, setIsDescExpanded] = useState(false);
 
     const AUTO_REVIEW_MAP: Record<number, string[]> = {
         5: [
@@ -432,9 +433,23 @@ export default function ProductDetails() {
                                 {product.title}
                             </h1>
 
-                            <p className="text-sm sm:text-base md:text-lg text-slate-400 text-lg leading-relaxed font-light border-l-2 border-indigo-500/30 pl-4">
-                                {product.description}
-                            </p>
+                            <div className="space-y-1">
+                                <p 
+                                    className={cn(
+                                        "text-sm sm:text-base md:text-lg text-slate-400 leading-relaxed font-light border-l-2 border-indigo-500/30 pl-4 transition-all duration-300",
+                                        !isDescExpanded && "line-clamp-2"
+                                    )}
+                                >
+                                    {product.description}
+                                </p>
+                                <button 
+                                    onClick={() => setIsDescExpanded(!isDescExpanded)}
+                                    className="text-xs sm:text-sm text-indigo-400 hover:text-indigo-300 font-medium pl-4 focus:outline-none transition-colors"
+                                    title={isDescExpanded ? "Show less" : "Read more..."}
+                                >
+                                    {isDescExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                </button>
+                            </div>
                         </div>
 
                         {/* 💰 PRICE (GOLDEN GLOW) */}
@@ -523,6 +538,7 @@ export default function ProductDetails() {
                         </div>
 
                         {/* 🔥 ACTION BUTTON (RUDRA FIRE) */}
+                        {/* 🔥 ACTION BUTTON (RUDRA FIRE) */}
                         <div className="pt-8">
                             <Button
                                 size="lg"
@@ -541,97 +557,8 @@ export default function ProductDetails() {
                             </p>
                         </div>
 
-                        <div className="border-t border-white/10 pt-10 space-y-8">
-                            <h3 className="text-xl font-bold text-slate-200">
-                                Customer Reviews
-                            </h3>
-
-                            {reviewsLoading ? (
-                                <p className="text-slate-500">Loading reviews...</p>
-                            ) : reviews.length === 0 ? (
-                                <div className="text-center space-y-4 py-10 bg-white/5 rounded-xl border border-white/10">
-                                    <div className="flex justify-center gap-1 text-slate-600">
-                                        {[1, 2, 3, 4, 5].map(i => (
-                                            <Star key={i} className="w-6 h-6" />
-                                        ))}
-                                    </div>
-
-                                    <p className="text-slate-400">No reviews yet</p>
-
-                                    <Button onClick={() => setShowReviewModal(true)} className="rounded-full px-4 md:px-6 h-9 md:h-10 text-sm md:text-base bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg shadow-orange-900/40 hover:shadow-orange-700/50 hover:scale-105 active:scale-95 transition-all duration-300 group border-0 relative overflow-hidden">
-                                        Be the first to write a review
-                                    </Button>
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <div className="flex gap-1">
-                                                {[1, 2, 3, 4, 5].map(i => (
-                                                    <Star
-                                                        key={i}
-                                                        className={cn(
-                                                            "w-4 h-4",
-                                                            i <= Math.round(averageRating)
-                                                                ? "fill-orange-400 text-orange-400"
-                                                                : "text-slate-600"
-                                                        )}
-                                                    />
-                                                ))}
-                                            </div>
-
-                                            <p className="text-sm text-slate-400">
-                                                {averageRating.toFixed(1)} · {totalReviews} review(s)
-                                            </p>
-                                        </div>
-
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setShowReviewModal(true)}
-                                            className="rounded-full px-4 md:px-6 h-9 md:h-10 text-sm md:text-base bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg shadow-orange-900/40 hover:shadow-orange-700/50 hover:scale-105 active:scale-95 transition-all duration-300 group border-0 relative overflow-hidden"
-                                        >
-                                            Write a review
-                                        </Button>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        {reviews.map(review => (
-                                            <div
-                                                key={review.id}
-                                                className="bg-white/5 border border-white/10 rounded-xl p-5 space-y-2"
-                                            >
-                                                <p className="font-semibold text-slate-200">
-                                                    {review.name}
-                                                </p>
-
-                                                <div className="flex gap-1">
-                                                    {[1, 2, 3, 4, 5].map(i => (
-                                                        <Star
-                                                            key={i}
-                                                            className={cn(
-                                                                "w-3.5 h-3.5",
-                                                                i <= review.rating
-                                                                    ? "fill-orange-400 text-orange-400"
-                                                                    : "text-slate-600"
-                                                            )}
-                                                        />
-                                                    ))}
-                                                </div>
-
-                                                <p className="text-sm text-slate-400">
-                                                    {review.comment}
-                                                </p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-
-
-                        {/* ICONS FOOTER */}
-                        <div className="grid grid-cols-2 gap-4 pt-8 border-t border-white/10">
+                        {/* ICONS FOOTER (Moved right below the button for instant trust) */}
+                        <div className="grid grid-cols-2 gap-4 pt-8 mt-4 border-t border-white/10">
                             <div className="flex items-center gap-3 text-sm text-slate-400 group">
                                 <div className="p-2.5 bg-white/5 rounded-full border border-white/5 group-hover:border-indigo-500/30 transition-colors"><Truck className="w-4 h-4 text-indigo-400" /></div>
                                 <span>Cosmic Speed Delivery</span>
@@ -642,6 +569,161 @@ export default function ProductDetails() {
                             </div>
                         </div>
 
+                    </div> {/* <-- THIS CLOSES THE RIGHT COLUMN */}
+                </div> {/* <-- THIS CLOSES THE 2-COLUMN GRID */}
+
+
+                {/* ========================================================= */}
+                {/* 🟢 NEW FULL-WIDTH SECTIONS (Spans the entire page) */}
+                {/* ========================================================= */}
+
+                <div className="mt-16 sm:mt-24 space-y-16">
+
+                    {/* FULL-WIDTH SPECS & EXPECTATIONS */}
+                    <div className="space-y-6">
+
+                        {/* Crafted For You Banner (Stretches full width) */}
+                        <div className="flex flex-col md:flex-row items-start md:items-center gap-5 p-6 md:p-8 rounded-2xl bg-gradient-to-r from-indigo-500/10 to-transparent border border-indigo-500/20 shadow-inner">
+                            <div className="p-4 bg-indigo-500/20 rounded-xl text-indigo-400 shrink-0 shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+                                <Sparkles className="w-6 h-6 md:w-8 md:h-8" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <h4 className="text-base md:text-lg font-bold text-indigo-200 uppercase tracking-wider">
+                                    Crafted Exclusively For You
+                                </h4>
+                                <p className="text-sm md:text-base text-slate-400 leading-relaxed max-w-5xl">
+                                    Good things take time. Your custom asset isn't pulled from a dusty warehouse shelf—it is freshly prepared and printed specifically for you. Please allow 5-7 days for careful production before your unique item ships.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Specs Grid (Now uses a beautiful 3-column layout on desktop!) */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="bg-white/5 border border-white/5 rounded-2xl p-6 flex flex-col gap-4 hover:bg-white/10 transition-colors">
+                                <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400 w-fit"><Palette className="w-6 h-6" /></div>
+                                <div>
+                                    <p className="text-lg font-bold text-slate-200 mb-1.5">Vibrant Print Tech</p>
+                                    <p className="text-sm text-slate-400 leading-relaxed">High-fidelity Direct-to-Film (DTF) printing. Eco-friendly, fade-resistant inks that bind seamlessly into the fabric.</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-white/5 border border-white/5 rounded-2xl p-6 flex flex-col gap-4 hover:bg-white/10 transition-colors">
+                                <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 w-fit"><Shield className="w-6 h-6" /></div>
+                                <div>
+                                    <p className="text-lg font-bold text-slate-200 mb-1.5">Built to Last</p>
+                                    <p className="text-sm text-slate-400 leading-relaxed">Premium materials featuring double-stitched hems, pre-shrunk fabric, and a seamless collar for ultimate durability.</p>
+                                </div>
+                            </div>
+
+                            {/* Conditionally render Wash Care based on product type */}
+                            {!product.title.toLowerCase().includes('mug') ? (
+                                <div className="bg-white/5 border border-white/5 rounded-2xl p-6 flex flex-col gap-4 hover:bg-white/10 transition-colors">
+                                    <div className="p-3 bg-cyan-500/10 rounded-xl text-cyan-400 w-fit"><Droplets className="w-6 h-6" /></div>
+                                    <div>
+                                        <p className="text-lg font-bold text-slate-200 mb-1.5">Wash & Care</p>
+                                        <p className="text-sm text-slate-400 leading-relaxed">Machine wash cold inside-out with similar colors. Tumble dry on low or hang-dry for longest life. Do not iron over print.</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-white/5 border border-white/5 rounded-2xl p-6 flex flex-col gap-4 hover:bg-white/10 transition-colors">
+                                    <div className="p-3 bg-cyan-500/10 rounded-xl text-cyan-400 w-fit"><Wind className="w-6 h-6" /></div>
+                                    <div>
+                                        <p className="text-lg font-bold text-slate-200 mb-1.5">Microwave & Dishwasher Safe</p>
+                                        <p className="text-sm text-slate-400 leading-relaxed">The high-quality sublimation printing ensures the design will not fade or peel, even after hundreds of washes.</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* FULL-WIDTH CUSTOMER REVIEWS (Centered nicely) */}
+                    <div className="border-t border-white/10 pt-16 space-y-8 max-w-4xl mx-auto">
+                        <h3 className="text-3xl font-black text-slate-200 text-center tracking-tight">
+                            Customer Reviews
+                        </h3>
+
+                        {reviewsLoading ? (
+                            <p className="text-slate-500 text-center">Loading reviews...</p>
+                        ) : reviews.length === 0 ? (
+                            <div className="text-center space-y-4 py-12 bg-white/5 rounded-2xl border border-white/10">
+                                <div className="flex justify-center gap-1 text-slate-600">
+                                    {[1, 2, 3, 4, 5].map(i => (
+                                        <Star key={i} className="w-8 h-8" />
+                                    ))}
+                                </div>
+
+                                <p className="text-slate-400 text-lg">No reviews yet</p>
+
+                                <Button onClick={() => setShowReviewModal(true)} className="rounded-full px-6 h-12 text-base font-bold bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg shadow-orange-900/40 hover:shadow-orange-700/50 hover:scale-105 active:scale-95 transition-all duration-300 border-0">
+                                    Be the first to write a review
+                                </Button>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-6 bg-white/5 p-8 rounded-3xl border border-white/10 shadow-lg">
+                                    <div className="text-center sm:text-left">
+                                        <div className="flex justify-center sm:justify-start gap-1 mb-3">
+                                            {[1, 2, 3, 4, 5].map(i => (
+                                                <Star
+                                                    key={i}
+                                                    className={cn(
+                                                        "w-6 h-6",
+                                                        i <= Math.round(averageRating)
+                                                            ? "fill-orange-400 text-orange-400 drop-shadow-sm"
+                                                            : "text-slate-600"
+                                                    )}
+                                                />
+                                            ))}
+                                        </div>
+
+                                        <p className="text-lg text-slate-300 font-medium">
+                                            {averageRating.toFixed(1)} out of 5 · <span className="text-slate-500">{totalReviews} review(s)</span>
+                                        </p>
+                                    </div>
+
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowReviewModal(true)}
+                                        className="rounded-full px-8 h-12 text-base font-bold bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg shadow-orange-900/40 hover:shadow-orange-700/50 hover:scale-105 active:scale-95 transition-all duration-300 border-0"
+                                    >
+                                        Write a review
+                                    </Button>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {reviews.map(review => (
+                                        <div
+                                            key={review.id}
+                                            className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4 hover:bg-white/10 transition-colors shadow-sm"
+                                        >
+                                            <div className="flex justify-between items-start">
+                                                <p className="font-bold text-slate-200 text-lg">
+                                                    {review.name}
+                                                </p>
+                                                <div className="flex gap-1">
+                                                    {[1, 2, 3, 4, 5].map(i => (
+                                                        <Star
+                                                            key={i}
+                                                            className={cn(
+                                                                "w-4 h-4",
+                                                                i <= review.rating
+                                                                    ? "fill-orange-400 text-orange-400"
+                                                                    : "text-slate-600"
+                                                            )}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <p className="text-base text-slate-400 leading-relaxed">
+                                                {review.comment}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>

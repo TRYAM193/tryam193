@@ -251,29 +251,45 @@
 
     <div class="totals-box">
       <div class="total-row">
-        <span>Subtotal:</span>
+        <span>Total Item Value:</span>
+        <span>{{currency}} {{mrpTotal}}</span>
+      </div>
+
+      {{#if bulkDiscount}}
+      <div class="total-row" style="color: #16a34a; font-weight: 600;">
+        <span>Volume Savings:</span>
+        <span>-{{currency}} {{bulkDiscount}}</span>
+      </div>
+      {{/if}}
+
+      {{#if referralDiscount}}
+      <div class="total-row" style="color: #16a34a; font-weight: 600;">
+        <span>Referral Reward:</span>
+        <span>-{{currency}} {{referralDiscount}}</span>
+      </div>
+      {{/if}}
+
+      <div style="border-top: 1px dashed #ccc; margin: 12px 0;"></div>
+
+      <div class="total-row">
+        <span>Taxable Subtotal:</span>
         <span>{{currency}} {{subTotal}}</span>
       </div>
 
       {{#if isIndia}}
-      <div class="total-row" style="color: #555;">
+      <div class="total-row" style="color: #555; font-size: 13px;">
         <span>CGST (2.5%):</span>
         <span>{{currency}} {{cgstTotal}}</span>
       </div>
-      <div class="total-row" style="color: #555;">
+      <div class="total-row" style="color: #555; font-size: 13px;">
         <span>SGST (2.5%):</span>
         <span>{{currency}} {{sgstTotal}}</span>
       </div>
       {{/if}}
 
-      {{#if referralDiscount}}
-      <div class="total-row" style="color: #000000; font-weight: 600; white-space: nowrap; gap: 10px;">
-        <span>Referral Reward:</span>
-        <span><strong>-{{currency}} {{referralDiscount}}</strong></span>
-      </div>
-      {{/if}}
+      <div style="border-top: 2px solid #1a1a1a; margin: 12px 0;"></div>
 
-      <div class="total-row grand-total">
+      <div class="total-row" style="font-size: 18px; font-weight: 800; color: #ea580c;">
         <span>Grand Total:</span>
         <span>{{currency}} {{grandTotal}}</span>
       </div>

@@ -83,16 +83,16 @@ async function generateInvoicePDF(orderData, itemsList) {
 
     const processedItems = itemsList.map((item, index) => {
       const quantity = Number(item.quantity || 1);
-      
+
       // 🟢 Extract the immutable ledger passed from the frontend (or fallback for older orders)
       const ledger = item.payment?.ledger || item.ledger || {};
-      
+
       const basePrice = Number(ledger.basePrice || item.price);
       const lineMRP = basePrice * quantity;
-      
+
       const allocatedBulk = Number(ledger.allocatedBulkDiscount || 0);
       const allocatedRef = Number(ledger.allocatedReferralDiscount || 0);
-      
+
       // 🟢 The EXACT amount paid for this line item after all discounts
       const finalLinePaid = Number(ledger.finalPaidPrice || (lineMRP - allocatedBulk - allocatedRef));
 
@@ -101,7 +101,7 @@ async function generateInvoicePDF(orderData, itemsList) {
       totalReferralDiscount += allocatedRef;
 
       let ratePerItem = basePrice;
-      let taxableTotal = finalLinePaid; 
+      let taxableTotal = finalLinePaid;
       let cgst = 0, sgst = 0;
 
       if (isIndia) {
@@ -123,7 +123,7 @@ async function generateInvoicePDF(orderData, itemsList) {
         title: item.title || item.productTitle,
         variant: variantStr,
         quantity: quantity,
-        rate: ratePerItem.toFixed(2), 
+        rate: ratePerItem.toFixed(2),
         amount: taxableTotal.toFixed(2), // Taxable Amount
         cgst: cgst.toFixed(2),
         sgst: sgst.toFixed(2)
@@ -174,11 +174,11 @@ async function generateInvoicePDF(orderData, itemsList) {
       mrpTotal: totalMRP.toFixed(2), // Original cart value
       bulkDiscount: totalBulkDiscount > 0 ? totalBulkDiscount.toFixed(2) : null,
       referralDiscount: totalReferralDiscount > 0 ? totalReferralDiscount.toFixed(2) : null,
-      
+
       subTotal: taxableSubTotal.toFixed(2), // The true taxable amount
       cgstTotal: totalCGST.toFixed(2),
       sgstTotal: totalSGST.toFixed(2),
-      
+
       grandTotal: finalGrandTotal.toFixed(2), // What they actually paid
       amountInWords: amountInWords
     };
@@ -668,10 +668,10 @@ async function generateTempMockups(shopId, token, blueprintId, providerId, varia
 
     // Wait for images
     const validImages = await waitForPrintifyImages(shopId, tempProductId, token);
-    
+
     // Cleanup
     await deletePrintifyProduct(shopId, tempProductId);
-    
+
     return validImages || [];
   } catch (err) {
     console.error("Temp Mockup Gen Error:", err.message);
@@ -682,6 +682,9 @@ async function generateTempMockups(shopId, token, blueprintId, providerId, varia
 
 // ------------------------------------------------------------------
 // 🛠️ UPDATED GENERATOR: Dual-Pass Support for Polos & Standard Routing
+// ------------------------------------------------------------------
+// ------------------------------------------------------------------
+// 🛠️ UPDATED GENERATOR: Smart Mockup Filtering by Position/Pass
 // ------------------------------------------------------------------
 async function getMockupsFromPrintify(item, printFiles, orderId) {
   const shopId = config.value().printify?.shop_id;
@@ -700,38 +703,46 @@ async function getMockupsFromPrintify(item, printFiles, orderId) {
     // ==========================================================
     if (isPolo) {
       console.log("Generating Polo Mockups (Dual-Pass)...");
-      
+
       // PASS 1: Left & Right Chest (Embroidery Blueprint)
       if (printFiles.left_chest || printFiles.right_chest) {
         const placeholders = [];
         if (printFiles.left_chest) {
           const lcId = await uploadPrintifyImage(printFiles.left_chest);
-          placeholders.push({ position: "left_chest", images: [{ id: lcId, x: 0.5, y: 0.5, scale: 1, angle: 0 }] });
+          placeholders.push({ position: "front_left_chest", images: [{ id: lcId, x: 0.5, y: 0.5, scale: 1, angle: 0 }] });
         }
         if (printFiles.right_chest) {
           const rcId = await uploadPrintifyImage(printFiles.right_chest);
-          placeholders.push({ position: "right_chest", images: [{ id: rcId, x: 0.5, y: 0.5, scale: 1, angle: 0 }] });
+          placeholders.push({ position: "front_right_chest", images: [{ id: rcId, x: 0.5, y: 0.5, scale: 1, angle: 0 }] });
         }
-        
+
         let variantId = await getPrintifyVariantId(map.blueprint_id_pockets, map.print_provider_id_pockets, 'L', item.variant.color);
         if (!variantId) variantId = await getPrintifyVariantId(map.blueprint_id_pockets, map.print_provider_id_pockets, 'L', 'Black');
 
         const pocketImages = await generateTempMockups(shopId, token, map.blueprint_id_pockets, map.print_provider_id_pockets, variantId, placeholders);
-        validImages.push(...pocketImages);
+
+        // 🟢 FIX: Only keep the FRONT and CHEST mockups from this pass. Discard the blank backs!
+        const frontMockups = pocketImages.filter(img =>
+          img.position === 'front' || img.position.includes('chest') || img.position.includes('lifestyle')
+        );
+        validImages.push(...frontMockups);
       }
 
       // PASS 2: Back Design (DTG Blueprint)
       if (printFiles.back) {
         const backId = await uploadPrintifyImage(printFiles.back);
         const placeholders = [{ position: "back", images: [{ id: backId, x: 0.5, y: 0.5, scale: 1, angle: 0 }] }];
-        
+
         let variantId = await getPrintifyVariantId(map.blueprint_id_back, map.print_provider_id_back, 'L', item.variant.color);
         if (!variantId) variantId = await getPrintifyVariantId(map.blueprint_id_back, map.print_provider_id_back, 'L', 'Black');
 
         const backImages = await generateTempMockups(shopId, token, map.blueprint_id_back, map.print_provider_id_back, variantId, placeholders);
-        validImages.push(...backImages);
+
+        // 🟢 FIX: Only keep the BACK mockups from this pass. Discard the blank fronts!
+        const backMockups = backImages.filter(img => img.position === 'back');
+        validImages.push(...backMockups);
       }
-    } 
+    }
     // ==========================================================
     // 👕 PATH B: STANDARD T-SHIRT / MUG STRATEGY
     // ==========================================================
@@ -757,12 +768,15 @@ async function getMockupsFromPrintify(item, printFiles, orderId) {
     if (!validImages || validImages.length === 0) throw new Error("Mockup timeout or no images returned");
 
     // ==================================================================
-    // 🧠 SMART SELECTION & UPLOAD (Original Logic Stays the Same)
+    // 🧠 SMART SELECTION & UPLOAD
     // ==================================================================
     let selectedMockups = { front: null, back: null, gallery: [] };
 
-    // Find the best images from the merged validImages array
-    const mainFront = validImages.find(img => (img.position === 'front' || img.position === 'left_chest') && img.is_default) || validImages[0];
+    // Find the best images from our newly filtered validImages array
+    const mainFront = validImages.find(img => (img.position === 'front' || img.position.includes('chest')) && img.is_default)
+      || validImages.find(img => img.position === 'front' || img.position.includes('chest'))
+      || validImages[0];
+
     const mainBack = validImages.find(img => img.position === 'back');
 
     const uploadTasks = [];
@@ -1018,11 +1032,11 @@ async function sendToQikink(orderData, processedItems) {
 
     // Designs
     const designs = [];
-    
+
     // Original Front Logic (For Standard Tees)
     if (item.printFiles.front) {
       designs.push({
-        design_code: `${cleanOrderId}_fr`, 
+        design_code: `${cleanOrderId}_fr`,
         placement_sku: "fr",
         width_inches: "10",
         height_inches: "12",
@@ -1256,30 +1270,30 @@ exports.refreshOrderStatus = functions
 
         // 1. FIX: Qikink returns an array! Grab the first item.
         const qikinkOrder = Array.isArray(res.data) ? res.data[0] : res.data;
-        
+
         if (!qikinkOrder) {
-            console.log("No order data returned from Qikink");
-            return { success: false, updated: false };
+          console.log("No order data returned from Qikink");
+          return { success: false, updated: false };
         }
 
         // 2. FIX: Convert to lowercase for safe checking
-        const qStatus = qikinkOrder.status?.toLowerCase(); 
-        
+        const qStatus = qikinkOrder.status?.toLowerCase();
+
         let newStatus = order.status;
         let trackingUrl = order.providerData?.trackingUrl;
         let courier_provider_name = order.providerData?.courier_provider_name;
 
         if (qStatus) {
-            // 3. FIX: Check strictly against lowercase strings!
-            if (qStatus.includes('ship') || qStatus.includes('dispatch') || qStatus.includes('out for delivery') || qStatus.includes('manifested')) {
-                newStatus = 'shipped';
-                trackingUrl = qikinkOrder.shipping?.tracking_link || trackingUrl;
-                courier_provider_name = qikinkOrder.shipping?.courier_provider_name || courier_provider_name;
-            } else if (qStatus.includes('deliver')) {
-                newStatus = 'delivered';
-            } else if (qStatus.includes('production') || qStatus.includes('print')) { 
-                newStatus = 'production';
-            }
+          // 3. FIX: Check strictly against lowercase strings!
+          if (qStatus.includes('ship') || qStatus.includes('dispatch') || qStatus.includes('out for delivery') || qStatus.includes('manifested')) {
+            newStatus = 'shipped';
+            trackingUrl = qikinkOrder.shipping?.tracking_link || trackingUrl;
+            courier_provider_name = qikinkOrder.shipping?.courier_provider_name || courier_provider_name;
+          } else if (qStatus.includes('deliver')) {
+            newStatus = 'delivered';
+          } else if (qStatus.includes('production') || qStatus.includes('print')) {
+            newStatus = 'production';
+          }
         }
 
         if (newStatus !== order.status) {
@@ -1291,6 +1305,42 @@ exports.refreshOrderStatus = functions
           });
           console.log(`✅ Order ${orderId} updated to ${newStatus}`);
           return { success: true, updated: true, newStatus };
+        }
+
+        if (newStatus === 'delivered' && order.status !== 'delivered') {
+          const customerName = order.shippingAddress.fullName || '';
+
+          if (order.payment?.method === 'cod' || order.isCod) {
+            console.log(`🇮🇳 Sending COD Invoice for ${order.id}...`);
+
+            const singleOrderContext = { ...order, groupId: null };
+
+            try {
+              const pdfUrl = await generateInvoicePDF(singleOrderContext, [order]);
+              if (pdfUrl) {
+                await sendInvoiceEmail(
+                  order.shippingAddress.email,
+                  pdfUrl,
+                  false,
+                  order.orderId,
+                  true,
+                  customerName
+                );
+                updateData.invoiceSent = true;
+              }
+            } catch (err) { console.error(`Invoice Gen Failed:`, err); }
+          }
+          else {
+            console.log(`🎉 Sending Friendly Delivery Email for ${order.id}...`);
+            await sendInvoiceEmail(
+              order.shippingAddress.email,
+              null,
+              false,
+              order.orderId,
+              true,
+              customerName
+            );
+          }
         }
       } catch (e) {
         console.error("Qikink Refresh Failed:", e.message || e);
@@ -1311,32 +1361,40 @@ const PRODUCT_DIMENSIONS = {
     print: { front: { w: 4500, h: 5400 }, back: { w: 4500, h: 5400 } }
   },
   "women-classic-tee": {
-    canvas: { w: 420, h: 560 },
-    print: { front: { w: 4000, h: 4800 }, back: { w: 4000, h: 4800 } }
+    canvas: { w: 420, h: 435 },
+    print: { front: { w: 4200, h: 4350 }, back: { w: 3900, h: 4950 } }
+  },
+
+  "mens-polo-tee":{
+    print: {
+      left_chest: { w: 1200, h: 1200 },
+      right_chest: { w: 1200, h: 1200 },
+      back: { w: 4200, h: 5400 }
+    }
   },
 
   // 👕 OVERSIZED TEES
   "unisex-oversized-tee": {
     canvas: { w: 420, h: 560 },
-    print: { front: { w: 4500, h: 5400 }, back: { w: 4500, h: 5400 } }
+    print: { front: { w: 4800, h: 6000 }, back: { w: 4800, h: 6000 } }
   },
 
   // 🧥 HOODIES
   "unisex-hoodie": {
     canvas: { w: 420, h: 500 },
-    print: { front: { w: 4000, h: 2750 }, back: { w: 4500, h: 5400 } }
+    print: { front: { w: 3000, h: 3600 }, back: { w: 4200, h: 5100 } }
   },
 
   // ☕ MUGS
   "mug-ceramic-11oz": {
-    canvas: { w: 800, h: 300 },
-    print: { front: { w: 2700, h: 1100 } } // Wrap-around print
+    canvas: { w: 765, h: 324 },
+    print: { front: { w: 2550, h: 1080 } } // Wrap-around print
   },
 
   // 👜 TOTE BAGS
   "tote-bag-canvas": {
-    canvas: { w: 380, h: 380 },
-    print: { front: { w: 3000, h: 3000 }, back: { w: 3000, h: 3000 } }
+    canvas: { w: 380, h: 360 },
+    print: { front: { w: 3000, h: 3600 } }
   }
 };
 
@@ -1652,49 +1710,49 @@ exports.processNewOrder = functions
 
       // A. Generate Print Files
       if (!isAdminApproved) {
-          for (const view of views) {
-            const designJson = JSON.parse(item.designData?.canvasViewStates?.[view]) || JSON.parse(item.designData?.viewStates?.[view]);
-            if (!designJson || designJson.length === 0) continue;
+        for (const view of views) {
+          const designJson = JSON.parse(item.designData?.canvasViewStates?.[view]) || JSON.parse(item.designData?.viewStates?.[view]);
+          if (!designJson || designJson.length === 0) continue;
 
-            const bucket = admin.storage().bucket();
-            const file = bucket.file(`orders/${orderId}/print_${view}.png`);
-            const imageBuffer = await renderDesignServerSide(designJson, item.productId, view);
+          const bucket = admin.storage().bucket();
+          const file = bucket.file(`orders/${orderId}/print_${view}.png`);
+          const imageBuffer = await renderDesignServerSide(designJson, item.productId, view);
 
-            await file.save(imageBuffer, {
-              metadata: { contentType: 'image/png' },
-              public: true,
-              validation: 'md5' 
-            });
+          await file.save(imageBuffer, {
+            metadata: { contentType: 'image/png' },
+            public: true,
+            validation: 'md5'
+          });
 
-            printFiles[view] = await getDownloadURL(file);
-          }
+          printFiles[view] = await getDownloadURL(file);
+        }
 
-          if (Object.keys(printFiles).length > 0) {
-            mockupFiles = await getMockupsFromPrintify(item, printFiles, orderId);
-          }
+        if (Object.keys(printFiles).length > 0) {
+          mockupFiles = await getMockupsFromPrintify(item, printFiles, orderId);
+        }
       }
 
       if (item.isBulkOrder && !isAdminApproved) {
-          console.log(`⏸️ Bulk Order ${orderId} trapped! Awaiting admin approval.`);
-          
-          await change.after.ref.update({
-             providerStatus: 'pending_admin_approval',
-             printFiles: printFiles,
-             mockupFiles: mockupFiles
-          });
+        console.log(`⏸️ Bulk Order ${orderId} trapped! Awaiting admin approval.`);
 
-          // Send Alert Email to Admin
-          const resend = new Resend(config.value().resend?.key);
-          await resend.emails.send({
-             from: 'TRYAM System <support@tryam193.in>',
-             to: ['admin@tryam193.in', 'tryam193@gmail.com'], // Add your actual admin emails
-             subject: `🚨 Bulk Order Needs Approval: ${orderId}`,
-             html: `<p>A bulk order of items requires your manual review before being sent to Qikink.</p>
+        await change.after.ref.update({
+          providerStatus: 'pending_admin_approval',
+          printFiles: printFiles,
+          mockupFiles: mockupFiles
+        });
+
+        // Send Alert Email to Admin
+        const resend = new Resend(config.value().resend?.key);
+        await resend.emails.send({
+          from: 'TRYAM System <support@tryam193.in>',
+          to: ['admin@tryam193.in', 'tryam193@gmail.com'], // Add your actual admin emails
+          subject: `🚨 Bulk Order Needs Approval: ${orderId}`,
+          html: `<p>A bulk order of items requires your manual review before being sent to Qikink.</p>
                     <p><b>Order ID:</b> ${orderId}</p>
                     <p><a href="https://tryam193.in/admin/orders">Click here to review the print files.</a></p>`
-          });
+        });
 
-          return null; // Safely shut down the bot without hitting Qikink!
+        return null; // Safely shut down the bot without hitting Qikink!
       }
 
       // Create a clean "Processed Item" object for the provider helpers
@@ -1772,8 +1830,8 @@ exports.createRazorpayOrder = functions
       if (data.applyReferralReward) {
         const userDoc = await db.collection('users').doc(context.auth.uid).get();
         if (!userDoc.exists || !userDoc.data().hasActiveReward) {
-           // If they hacked the frontend payload but don't actually have the reward in DB
-           throw new functions.https.HttpsError('permission-denied', 'Invalid referral reward.');
+          // If they hacked the frontend payload but don't actually have the reward in DB
+          throw new functions.https.HttpsError('permission-denied', 'Invalid referral reward.');
         }
         // 🟢 WE DO NOT SUBTRACT 100 HERE ANYMORE! The frontend already factored it into data.amount.
       }
@@ -1783,7 +1841,7 @@ exports.createRazorpayOrder = functions
         currency: data.currency || "INR",
         payment_capture: 1,
         notes: {
-          groupId: data.groupId 
+          groupId: data.groupId
         }
       });
 
@@ -1923,7 +1981,7 @@ exports.razorpayWebhook = functions
           totalQuantity += (order.quantity || 1);
         });
         // ... (inside razorpayWebhook, right before the FRAUD CHECK) ...
-        const isBulkOrder = totalQuantity >= 10; 
+        const isBulkOrder = totalQuantity >= 10;
 
         // 🟢 FIX: We check against the 'cartTotal' which represents the whole group's expected payment
         const expectedAmount = allOrderData[0].payment.cartTotal;
@@ -2370,13 +2428,13 @@ exports.pollQikinkOrders = functions.runWith({ timeoutSeconds: 540, memory: '1GB
       if (!order.providerOrderId) continue;
 
       try {
-        const res = await axios.get(`${QIKINK_BASE_URL}/api/order?id=${order.providerOrderId}&from_date=${order.createdAt?.slice(10)}&to_date=${order.createdAt?.slice(10)}`, {
+        const res = await axios.get(`${QIKINK_BASE_URL}/api/order?id=${order.providerOrderId}`, {
           headers: { 'ClientId': clientId, 'Accesstoken': token }
         });
 
         // 1. FIX: Handle Array Response correctly
         const qikinkOrder = Array.isArray(res.data) ? res.data[0] : res.data;
-        
+
         if (!qikinkOrder || !qikinkOrder.status) continue;
 
         // 2. FIX: Convert to lowercase for safe checking
@@ -2386,7 +2444,7 @@ exports.pollQikinkOrders = functions.runWith({ timeoutSeconds: 540, memory: '1GB
 
         // 3. FIX: Match lowercase strings & add Manifested/Out for Delivery
         if (qStatus.includes('print') || qStatus.includes('process') || qStatus.includes('production')) {
-            newStatus = 'production';
+          newStatus = 'production';
         }
         else if (qStatus.includes('ship') || qStatus.includes('dispatch') || qStatus.includes('out for delivery') || qStatus.includes('manifested')) {
           newStatus = 'shipped';
@@ -2403,7 +2461,7 @@ exports.pollQikinkOrders = functions.runWith({ timeoutSeconds: 540, memory: '1GB
           trackingUpdates = { deliveredAt: admin.firestore.FieldValue.serverTimestamp() };
         }
         else if (qStatus.includes('cancel')) {
-            newStatus = 'cancelled';
+          newStatus = 'cancelled';
         }
         else if (qStatus.includes('rto')) {
           newStatus = 'cancelled';
@@ -2435,7 +2493,7 @@ exports.pollQikinkOrders = functions.runWith({ timeoutSeconds: 540, memory: '1GB
                   await sendInvoiceEmail(
                     order.shippingAddress.email,
                     pdfUrl,
-                    false, 
+                    false,
                     order.orderId,
                     true,
                     customerName
@@ -2448,7 +2506,7 @@ exports.pollQikinkOrders = functions.runWith({ timeoutSeconds: 540, memory: '1GB
               console.log(`🎉 Sending Friendly Delivery Email for ${order.id}...`);
               await sendInvoiceEmail(
                 order.shippingAddress.email,
-                null,  
+                null,
                 false,
                 order.orderId,
                 true,
@@ -2460,8 +2518,8 @@ exports.pollQikinkOrders = functions.runWith({ timeoutSeconds: 540, memory: '1GB
           batch.update(orderRef, updateData);
           updateCount++;
         }
-      } catch (err) { 
-          console.error(`Poll Error ${order.orderId}:`, err.message); 
+      } catch (err) {
+        console.error(`Poll Error ${order.orderId}:`, err.message);
       }
     }
 

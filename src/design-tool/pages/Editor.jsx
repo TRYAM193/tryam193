@@ -142,9 +142,9 @@ export default function EditorPanel() {
     const [quantity, setQuantity] = useState(1);
 
     const [canvasBg, setCanvasBg] = useState(COLOR_MAP[urlColor]);
-    const [currentView, setCurrentView] = useState(productData?.print_areas?.front ? 'front' : 'back');
+    const isPolo = (urlProductId && urlProductId === 'mens-polo-tee');
+    const [currentView, setCurrentView] = useState(isPolo ? 'back' : 'front');
     const [viewStates, setViewStates] = useState({});
-
     // ✅ NEW: Track Full Fabric JSON for High-Quality Rendering
     const [canvasViewStates, setCanvasViewStates] = useState({});
     const [dpiRegistry, setDpiRegistry] = useState({});

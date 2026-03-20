@@ -199,8 +199,8 @@ export function ThreeDPreviewModal({
                                                         key={chestKey}
                                                         className="absolute z-20 border border-transparent hover:border-white/50 transition-colors overflow-hidden"
                                                         style={{
-                                                            top: `${area.top + 3}%`,
-                                                            left: `${area.left + (test * 9)}%`,
+                                                            top: `${area.top}%`,
+                                                            left: `${area.left}%`,
                                                             width: `${area.width}%`,
                                                             height: `${area.height}%`,
                                                         }}
@@ -220,10 +220,10 @@ export function ThreeDPreviewModal({
                                                 <div
                                                     className="absolute z-20 border border-transparent hover:border-white/50 transition-colors overflow-hidden"
                                                     style={{
-                                                        top: `${adjustments.top}%`,
-                                                        left: `${adjustments.left}%`,
-                                                        width: `${adjustments.width}%`,
-                                                        height: `${adjustments.height}%`,
+                                                        top: `${adjustments.top - 1}%`,
+                                                        left: `${adjustments.left - 3}%`,
+                                                        width: `${adjustments.width + 5}%`,
+                                                        height: `${adjustments.height + 2}%`,
                                                     }}
                                                 >
                                                     {isMug ? (

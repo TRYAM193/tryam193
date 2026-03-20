@@ -52,7 +52,7 @@ export default function ContactPage() {
             {["Catalog", "Designs", "Help", "Contact"].map((item) => (
               <Link 
                 key={item} 
-                to={item === "Catalog" ? "/store" : item === "Designs" ? "/dashboard/designs" : `/${item.toLowerCase()}`} 
+                to={item === "Catalog" ? "/store" : item === "Designs" ? "/designs" : `/${item.toLowerCase()}`} 
                 className={`text-sm font-medium transition-colors relative group ${item === "Contact" ? "text-orange-400" : "text-slate-300 hover:text-orange-400"}`}
               >
                 {item}
@@ -102,9 +102,9 @@ export default function ContactPage() {
             {/* LEFT: INFO CARDS */}
             <div className="space-y-6 lg:col-span-1">
                 {[
-                    { icon: Mail, title: "Email Us", desc: "Our friendly team is here to help.", link: "support@tryam.com", color: "text-blue-400", bg: "bg-blue-500/10" },
-                    { icon: MapPin, title: "Office", desc: "Come say hello at our office HQ.", link: "123 Innovation Hub, Bengaluru", color: "text-purple-400", bg: "bg-purple-500/10" },
-                    { icon: Phone, title: "Phone", desc: "Mon-Fri from 8am to 5pm.", link: "+91 98765 43210", color: "text-orange-400", bg: "bg-orange-500/10" }
+                    { icon: Mail, title: "Email Us", desc: "Our friendly team is here to help.", link: "support@tryam193.com", color: "text-blue-400", bg: "bg-blue-500/10" },
+                    { icon: MapPin, title: "Office", desc: "Come say hello at our office HQ.", link: "#150/4 14th Main Road Kalidasa Layout Srinagar", color: "text-purple-400", bg: "bg-purple-500/10" },
+                    { icon: Phone, title: "Phone", desc: "Mon-Fri from 8am to 5pm.", link: "+91 82170 37173", color: "text-orange-400", bg: "bg-orange-500/10" }
                 ].map((item, i) => (
                     <Card key={i} className="bg-white/5 border-white/5 backdrop-blur-sm hover:bg-white/10 transition-colors">
                         <CardContent className="p-6">

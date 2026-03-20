@@ -3,7 +3,7 @@ import { useParams, Link, useLocation, useNavigate } from "react-router";
 import {
   Truck, Calendar, MapPin, ExternalLink,
   ArrowLeft, RefreshCw, Loader2, Check, Circle, Zap, Tag,
-  Printer, Shirt, CreditCard, ShieldCheck, HelpCircle, AlertCircle,
+  Printer, Shirt, CreditCard, ShieldCheck, HelpCircle, AlertCircle, PackageCheck, Clock,
   Sparkles, Archive, FileImage, Download, Phone, Send, MessageSquare, XCircle
 } from "lucide-react";
 
@@ -513,8 +513,8 @@ const OrderTrackerVertical = ({ status, providerStatus }: { status: string, prov
     <div className="relative pl-4 py-2">
       <div className="absolute left-[35px] top-5 bottom-5 w-[2px] bg-slate-800" />
       <div
-        className="absolute left-[35px] top-5 w-[2px] bg-green-500 transition-all duration-700 ease-out"
-        style={{ height: `${(currentStep / (steps.length - 1)) * 100}%` }}
+        className="absolute left-[35px] top-5 bottom-5 w-[2px] bg-green-500 transition-all duration-700 ease-out"
+        style={{ height: `${(currentStep / (steps.length - 1)) * 100 - (currentStep >= 3 ? 10 : 0)}%` }}
       />
       <div className="space-y-8">
         {steps.map((step, index) => {
@@ -682,7 +682,7 @@ export default function OrderDetailsPage() {
 
   const currencySymbol = order?.payment?.currency || order?.currency || '$';
   const ledger = order?.payment?.ledger || {};
-  
+
   // Fallback to legacy structure if ledger doesn't exist for old orders
   const basePrice = ledger.basePrice ?? (order ? (Number(order.price) * Number(order.quantity)) : 0);
   const bulkDiscount = ledger.allocatedBulkDiscount ?? 0;
@@ -787,7 +787,7 @@ export default function OrderDetailsPage() {
 
                   {/* INFO GRID */}
                   <div className="flex-1 flex flex-col gap-5">
-                    
+
                     {/* Title & Trust Badge */}
                     <div>
                       <h2 className="text-2xl font-black text-white leading-tight mb-1.5">
@@ -831,7 +831,7 @@ export default function OrderDetailsPage() {
                       {/* Decorative elements */}
                       <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl" />
                       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-slate-700 to-transparent opacity-50" />
-                      
+
                       <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                         <CreditCard className="w-3.5 h-3.5" /> Item Receipt
                       </h4>
@@ -871,7 +871,7 @@ export default function OrderDetailsPage() {
                             {currencySymbol} {specificOrderTotal.toFixed(2)}
                           </span>
                         </div>
-                        
+
                         <Button size="sm" className="bg-white/10 hover:bg-white/20 text-white border border-white/5 shadow-sm rounded-lg h-9 px-4 transition-all hover:scale-105">
                           Buy Again
                         </Button>
@@ -897,7 +897,13 @@ export default function OrderDetailsPage() {
                       {order.printFiles?.back && (
                         <PrintFileCard label="Back Print" url={order.printFiles.back} />
                       )}
-                      {!order.printFiles?.front && !order.printFiles?.back && (
+                      {order.printFiles?.left_chest && (
+                        <PrintFileCard label="Left Chest Print" url={order.printFiles.left_chest} />
+                      )}
+                      {order.printFiles?.right_chest && (
+                        <PrintFileCard label="Right Chest Print" url={order.printFiles.right_chest} />
+                      )}
+                      {!order.printFiles?.front && !order.printFiles?.back && !order.printFiles?.left_chest && !order.printFiles?.right_chest && (
                         <div className="p-4 border border-dashed border-white/10 rounded-lg text-center text-xs text-slate-500">
                           <Printer className="w-4 h-4 mx-auto mb-1 opacity-50" />
                           Processing print files...
@@ -995,16 +1001,29 @@ export default function OrderDetailsPage() {
                     <span className="text-slate-400">Method</span>
                     <span className="text-white font-medium">Standard Shipping</span>
                   </div>
-                  
+
                   {/* 🟢 FRIENDLY DELIVERY TIMELINE EXPECTATION */}
                   <div className="flex flex-col gap-1.5 pt-4 mt-2 border-t border-white/10">
                     <span className="text-slate-400 text-[11px] font-bold uppercase tracking-wider">
                       Delivery Timeline
                     </span>
-                    <span className="text-indigo-300 text-sm leading-relaxed">
-                      {order.status === 'shipped' || order.status === 'delivered'
-                        ? "Your order is on the move! Please check your tracking link for the exact delivery date. 🚚"
-                        : "Since your item is custom-made just for you, our courier partner will calculate the exact delivery date once it ships. We'll notify you with a tracking link as soon as it's ready! 📦"}
+                    <span className="text-indigo-300 text-sm leading-relaxed flex items-start gap-2">
+                      {order.status === 'delivered' ? (
+                        <>
+                          <PackageCheck size={20} className="mt-0.5" />
+                          Your order has been successfully delivered! We hope you love your custom creation. If you need anything, we're here for you.
+                        </>
+                      ) : order.status === 'shipped' ? (
+                        <>
+                          <Truck size={18} className="mt-0.5" />
+                          Your order is on the way! Track it using the link for the exact delivery date.
+                        </>
+                      ) : (
+                        <>
+                          <Clock size={18} className="mt-0.5" />
+                          Since your item is custom-made, the delivery date will be calculated once it ships. You'll get a tracking link soon.
+                        </>
+                      )}
                     </span>
                   </div>
                   {order.providerData?.trackingCode && (

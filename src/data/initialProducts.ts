@@ -12,13 +12,13 @@ export const INITIAL_PRODUCTS = [
     description: "The T-shirt you'll reach for every single day. Crafted from soft premium cotton that feels light on your skin and strong enough for everyday life. Whether you're heading out with friends, chasing your goals, or just relaxing, this tee becomes a part of your story. Simple, timeless, and made for the person you are becoming.",
 
     print_areas: {
-      front: { width: 4500, height: 5400 },
-      back: { width: 4500, height: 5400 }
+      front: { width: 4200, height: 4800 },
+      back: { width: 4200, height: 4800 }
     },
 
     canvas_size: {
-      width: 450,
-      height: 540
+      width: 420,
+      height: 480
     },
 
     variants: {
@@ -147,15 +147,15 @@ export const INITIAL_PRODUCTS = [
     "description": "A refined classic that blends comfort with style. This polo tee is crafted from breathable premium cotton and finished with a structured collar for a clean, polished look. Perfect for workdays, casual outings, or everyday wear.",
 
     "print_areas": {
-      "left_chest": { "width": 1500, "height": 1500 },
-      "right_chest": { "width": 1500, "height": 1500 },
-      "back": { "width": 4200, "height": 5200 }
+      "left_chest": { "width": 1200, "height": 1200 },
+      "right_chest": { "width": 1200, "height": 1200 },
+      "back": { "width": 4200, "height": 5400 }
     },
 
     "canvas_size": {
-      "left_chest": { "width": 300, "height": 300 },
-      "right_chest": { "width": 300, "height": 300 },
-      "back": { "width": 420, "height": 520 }
+      "left_chest": { "width": 240, "height": 240 },
+      "right_chest": { "width": 240, "height": 240 },
+      "back": { "width": 420, "height": 540 }
     },
 
     "price": {
@@ -172,9 +172,9 @@ export const INITIAL_PRODUCTS = [
     },
 
     "print_area_2d": {
-      "left_chest": { "top": 30, "left": 29, "width": 20, "height": 20 },
-      "right_chest": { "top": 30, "left": 54, "width": 20, "height": 20 },
-      back: { top: 28, left: 29.5, width: 42, height: 49 }
+      "left_chest": { "top": 28, "left": 27, "width": 20, "height": 20 },
+      "right_chest": { "top": 28, "left": 56, "width": 20, "height": 20 },
+      back: { top: 31, left: 32.5, width: 37, height: 43 }
     },
 
     "variants": {
@@ -197,7 +197,7 @@ export const INITIAL_PRODUCTS = [
           "XXL": [46, 30],
           "3XL": [48, 31]
         }
-      }, 
+      },
     },
 
     vendor_maps: {
@@ -207,15 +207,15 @@ export const INITIAL_PRODUCTS = [
         // Qikink Color Codes (Bk=Black, Wh=White, Nb=Navy Blue, Rd=Red, Rb=Royal Blue, Gm=Grey Melange)
         color_map: {
           "Black": "Bk", "White": "Wh", "Navy Blue": "Nb", "Grey Melange": "Gm", "Royal Blue": "Rb",
-           "Maroon": "Mn", "Mustard Yellow": "MYl"
+          "Maroon": "Mn", "Mustard Yellow": "MYl"
         }
       },
       printify: {
-        blueprint_id_pockets: 1984,      
-        print_provider_id_pockets: 217,   
-        
-        blueprint_id_back: 1402, 
-        print_provider_id_back: 39         
+        blueprint_id_pockets: 1984,
+        print_provider_id_pockets: 217,
+
+        blueprint_id_back: 1402,
+        print_provider_id_back: 39
       },
     }
   },
@@ -230,8 +230,8 @@ export const INITIAL_PRODUCTS = [
     description: "Built for those who move differently. The oversized streetwear tee gives you freedom, comfort, and confidence in every step. With its relaxed drop-shoulder fit and premium heavyweight fabric, it feels as bold as your personality. Whether you're creating art, exploring the city, or just expressing yourself — this tee becomes your statement.",
 
     print_areas: {
-      front: { width: 4500, height: 5400 },
-      back: { width: 4500, height: 5400 }
+      front: { width: 4800, height: 6000 },
+      back: { width: 4800, height: 6000 }
     },
 
     mockups: {
@@ -240,8 +240,8 @@ export const INITIAL_PRODUCTS = [
     },
 
     canvas_size: {
-      width: 450,
-      height: 540
+      width: 480,
+      height: 600
     },
 
     price: {
@@ -327,8 +327,8 @@ export const INITIAL_PRODUCTS = [
     description: "More than just a hoodie — it's comfort you can carry everywhere. Warm, soft, and built for everyday adventures, this hoodie wraps you in a feeling of calm and confidence. Perfect for chilly mornings, late night drives, or quiet moments with music. Once you wear it, it becomes the hoodie you never want to take off.",
 
     print_areas: {
-      front: { width: 4000, height: 4000 },
-      back: { width: 4500, height: 5400 },
+      front: { width: 3000, height: 3600 },
+      back: { width: 4200, height: 5100 },
     },
 
     mockups: {
@@ -338,17 +338,17 @@ export const INITIAL_PRODUCTS = [
 
     canvas_size: {
       front: {
-        width: 400,
-        height: 400
+        width: 300,
+        height: 360
       },
       back: {
-        width: 450,
-        height: 540
+        width: 420,
+        height: 510
       }
     },
 
     price: {
-      IN: 899,
+      IN: 949,
       US: 39.9,
       GB: 29.9,
       EU: 55.9,
@@ -405,7 +405,7 @@ export const INITIAL_PRODUCTS = [
 
     print_area_2d: {
       front: { top: 32, left: 33.5, width: 33.5, height: 24.5 },
-      back: { top: 40, left: 35, width: 32, height: 29 }
+      back: { top: 39, left: 32, width: 37, height: 31 }
     },
 
     options: {
@@ -443,8 +443,8 @@ export const INITIAL_PRODUCTS = [
     description: "Designed to celebrate confidence and comfort. This fitted tee gently follows your natural shape while staying soft and breathable all day long. Whether you're dressing up your day or keeping it simple, it adds a touch of effortless style to every moment.",
 
     print_areas: {
-      front: { width: 4000, height: 4800 },
-      back: { width: 4000, height: 4800 }
+      front: { width: 4200, height: 4350 },
+      back: { width: 3900, height: 4950 }
     },
 
     mockups: {
@@ -453,8 +453,14 @@ export const INITIAL_PRODUCTS = [
     },
 
     canvas_size: {
-      width: 400,
-      height: 480
+      front: {
+        width: 420,
+        height: 435
+      },
+      back: {
+        width: 390,
+        height: 495
+      }
     },
 
     price: {
@@ -550,16 +556,16 @@ export const INITIAL_PRODUCTS = [
     description: "Every great day begins with a warm cup and a moment to yourself. This classic ceramic mug turns your coffee or tea into a daily ritual worth enjoying. Strong, elegant, and perfect for your favorite design — it's not just a mug, it's a small piece of comfort in your everyday life.",
 
     print_areas: {
-      front: { width: 2700, height: 1100 }
+      front: { width: 2550, height: 1080 }
     },
 
     canvas_size: {
-      width: 800,
-      height: 326
+      width: 765,
+      height: 324
     },
 
     price: {
-      IN: 399,
+      IN: 449,
       US: 19.99,
       GB: 14.99,
       EU: 16.99,
@@ -621,17 +627,18 @@ export const INITIAL_PRODUCTS = [
     description: "Carry your world with style and purpose. This eco-friendly canvas tote is strong enough for your daily essentials and simple enough to match every outfit. From grocery runs to college days or weekend outings, it becomes the bag that travels everywhere with you.",
 
     print_areas: {
-      front: { width: 3000, height: 3000 },
-      back: { width: 3000, height: 3000 }
+      front: { width: 3000, height: 3600 },
     },
 
     canvas_size: {
-      width: 380,
-      height: 380
+      front: {
+        width: 300,
+        height: 360
+      }
     },
 
     price: {
-      IN: 449,
+      IN: 549,
       US: 26.99,
       GB: 20.99,
       EU: 14.99,
@@ -640,12 +647,10 @@ export const INITIAL_PRODUCTS = [
 
     mockups: {
       front: "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/mockups%2Ftote-bag%2Ftote-bag.png?alt=media&token=1362dba6-debb-40a9-a893-c20aee247e0b",
-      back: "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/mockups%2Ftote-bag%2Ftote-bag.png?alt=media&token=1362dba6-debb-40a9-a893-c20aee247e0b"
     },
 
     print_area_2d: {
       front: { top: 43, left: 29, width: 40.5, height: 33.5 },
-      back: { top: 43, left: 29, width: 40.5, height: 33.5 }
     },
 
     variants: {

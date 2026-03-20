@@ -93,7 +93,7 @@ export default function HelpPage() {
             {["Catalog", "Designs", "Help", "Contact"].map((item) => (
               <Link 
                 key={item} 
-                to={item === "Catalog" ? "/store" : item === "Designs" ? "/dashboard/designs" : `/${item.toLowerCase()}`} 
+                to={item === "Catalog" ? "/store" : item === "Designs" ? "/designs" : `/${item.toLowerCase()}`} 
                 className={`text-sm font-medium transition-colors relative group ${item === "Help" ? "text-orange-400" : "text-slate-300 hover:text-orange-400"}`}
               >
                 {item}

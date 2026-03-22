@@ -4,7 +4,6 @@ import SavePromptModal from './SavePromptModal';
 import { CloudUpload } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils"; // ✅ Import utility for class merging
-import { sl } from 'date-fns/locale/sl';
 
 export default function SaveDesignButton({
   canvas,
@@ -24,6 +23,7 @@ export default function SaveDesignButton({
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState('idle');
 
   let slimObjectsToSave = JSON.parse(JSON.stringify(canvas.present)); // Start with the current Redux state of canvas objects
 
@@ -32,6 +32,8 @@ export default function SaveDesignButton({
   };
 
   const handleConfirmSave = async (name, saveAsCopy) => {
+    setSaveResult('idle');
+    setIsSaving(true);
     // 1. Capture Snapshot
     const snapshot = onGetSnapshot ? await onGetSnapshot(1200, true) : null;
     let result;
@@ -57,14 +59,14 @@ export default function SaveDesignButton({
           return reduxObj;
         });
       }
-      
+
       result = await saveNewDesign(
         userId,
         slimObjectsToSave, // 👈 Pass the updated slim array here
         viewStates,
         productData,
         currentView,
-        setIsSaving,
+        () => {}, // 👈 Override internal setIsSaving hook to prevent UI flashing
         snapshot,
         name,
         saveAsCopy
@@ -78,7 +80,7 @@ export default function SaveDesignButton({
         viewStates,
         productData,
         currentView,
-        setIsSaving,
+        () => {}, // 👈 Override internal setIsSaving hook to prevent UI flashing
         snapshot,
         name
       );
@@ -86,10 +88,18 @@ export default function SaveDesignButton({
 
     if (result && result.success) {
       if (onSaveSuccess) onSaveSuccess(result.id);
-      alert("Design saved successfully!");
-      setIsModalOpen(false);
+      setSaveResult('success');
+      setTimeout(() => {
+        setIsModalOpen(false);
+        setIsSaving(false);
+        setSaveResult('idle');
+      }, 1500);
     } else {
-      alert("Failed to save design");
+      setSaveResult('error');
+      setTimeout(() => {
+        setIsSaving(false);
+        setSaveResult('idle');
+      }, 2000);
     }
   };
 
@@ -111,6 +121,7 @@ export default function SaveDesignButton({
         onClose={() => setIsModalOpen(false)}
         onConfirm={handleConfirmSave}
         isSaving={isSaving}
+        saveResult={saveResult}
         isExistingDesign={!!urlDesignId}
         currentName={currentDesignName}
       />

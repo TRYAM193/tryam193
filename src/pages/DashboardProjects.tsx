@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Search, Image as ImageIcon, Trash2, Calendar, PaletteIcon } from "lucide-react";
+import { Search, Image as ImageIcon, Trash2, Calendar, PaletteIcon, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -9,20 +9,24 @@ import { useAuth } from "@/hooks/use-auth";
 import { doc, deleteDoc } from "firebase/firestore";
 import { db } from "@/firebase";
 import { deleteDesign } from '@/design-tool/utils/deleteDesign';
+import { toast } from "sonner";
 
 export default function DashboardProjects() {
   const { user } = useAuth();
   const { designs, loading } = useUserDesigns(user?.uid);
   
   const [searchQuery, setSearchQuery] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Filtering Logic
+  // Filtering & Sorting Logic
   const filteredDesigns = useMemo(() => {
     if (!designs) return [];
-    return designs.filter((design) => {
-      const name = design.name || "Untitled";
-      return name.toLowerCase().includes(searchQuery.toLowerCase());
-    });
+    return [...designs]
+      .filter((design) => {
+        const name = design.name || "Untitled";
+        return name.toLowerCase().includes(searchQuery.toLowerCase());
+      })
+      .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
   }, [searchQuery, designs]);
 
   // Handle Opening Project (New Tab)
@@ -37,12 +41,15 @@ export default function DashboardProjects() {
     if (!user) return;
     
     if (window.confirm(`Are you sure you want to delete "${designName}"? This cannot be undone.`)) {
+      setDeletingId(designId);
       try {
         await deleteDesign(designId, user.uid);
-        alert("Project deleted successfully.");
+        toast.success("Project deleted successfully.");
       } catch (err) {
         console.error("Error deleting design:", err);
-        alert("Failed to delete project.");
+        toast.error("Failed to delete project.");
+      } finally {
+        setDeletingId(null);
       }
     }
   };
@@ -129,10 +136,15 @@ export default function DashboardProjects() {
                  <div className="absolute top-2 right-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                    <button
                      onClick={(e) => handleDeleteProject(e, design.id, design.name)}
-                     className="p-1.5 md:p-2 rounded-full bg-black/60 hover:bg-red-600 text-white backdrop-blur-md transition-colors shadow-lg"
+                     disabled={deletingId === design.id}
+                     className="p-1.5 md:p-2 rounded-full bg-black/60 hover:bg-red-600 text-white backdrop-blur-md transition-colors shadow-lg disabled:opacity-50"
                      title="Delete Project"
                    >
-                     <Trash2 size={14} className="md:w-4 md:h-4" />
+                     {deletingId === design.id ? (
+                       <Loader2 size={14} className="md:w-4 md:h-4 animate-spin" />
+                     ) : (
+                       <Trash2 size={14} className="md:w-4 md:h-4" />
+                     )}
                    </button>
                  </div>
               </div>

@@ -318,8 +318,11 @@ export default function DashboardHome() {
                   </div>
                 ))
               ) : userDesigns && userDesigns.length > 0 ? (
-                // DESIGN CARDS (Limit 10)
-                userDesigns.slice(0, 10).map((design) => (
+                // DESIGN CARDS sorted by newest first (Limit 10)
+                [...userDesigns]
+                  .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
+                  .slice(0, 10)
+                  .map((design) => (
                   <motion.div
                     key={design.id}
                     whileHover={{ y: -5 }}

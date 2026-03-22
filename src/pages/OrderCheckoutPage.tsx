@@ -66,7 +66,7 @@ const StripeCheckoutForm = ({ clientSecret, shippingInfo, onSuccess, onError }: 
           }
         }
       },
-      redirect: 'if_required' 
+      redirect: 'if_required'
     });
 
     if (error) {
@@ -93,7 +93,7 @@ export default function OrderCheckoutPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  
+
   const [showSuccess, setShowSuccess] = useState(false);
   const { items: cartItems, cartTotal, clearCart } = useCart();
 
@@ -109,7 +109,7 @@ export default function OrderCheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('online');
 
   const [showVerifyModal, setShowVerifyModal] = useState(false);
-  const [isPhoneVerified, setIsPhoneVerified] = useState(false); 
+  const [isPhoneVerified, setIsPhoneVerified] = useState(false);
   const [paymentFailed, setPaymentFailed] = useState(false);
   const [failureReason, setFailureReason] = useState("");
   const GST_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
@@ -124,7 +124,7 @@ export default function OrderCheckoutPage() {
   const { summary, allocatedItems } = useMemo(() => {
     return calculateCartTotalsAndAllocations(items, isRewardValid);
   }, [items, isRewardValid]);
-  
+
   const { discountPct, message, progress, color, bgProgress } = getVolumeDiscount(summary.totalItems || 0);
 
   const [isLocationLocked, setIsLocationLocked] = useState(false);
@@ -133,7 +133,7 @@ export default function OrderCheckoutPage() {
   const [showStripeModal, setShowStripeModal] = useState(false);
   const [pendingOrderId, setPendingOrderId] = useState('');
   const email = user?.email;
-  
+
   const [shippingInfo, setShippingInfo] = useState({
     fullName: user?.displayName || '',
     email: user?.email ? user.email : email,
@@ -226,7 +226,7 @@ export default function OrderCheckoutPage() {
   };
 
   const countries = useMemo(() => {
-    const allowedCodes = ['IN', 'US', 'GB', 'CA'];
+    const allowedCodes = ['IN'];
     return Country.getAllCountries().filter(c => allowedCodes.includes(c.isoCode));
   }, []);
 
@@ -249,13 +249,14 @@ export default function OrderCheckoutPage() {
   };
 
   const currencySymbol = shippingInfo.countryCode === 'US' ? "$" : (shippingInfo.countryCode === 'GB' ? "£" : (['DE', 'FR', 'IT', 'ES', 'NL'].includes(shippingInfo.countryCode) ? "€" : (shippingInfo.countryCode === 'CA') ? "C$" : "₹"));
-  
- // 🟢 Use the secure Math summary for the final checkouts
-  const totalPayAmount = summary.finalGrandTotal;
+
+  // 🟢 Use the secure Math summary for the final checkouts
+  const COD_FEE = 50;
+  const totalPayAmount = paymentMethod === 'cod' ? summary.finalGrandTotal + COD_FEE : summary.finalGrandTotal;
   const basePayAmount = summary.mrpSubtotal;
 
   // ✅ FIX: Derive COD availability instantly without causing a re-render loop
-  const isCODAvailable = totalPayAmount < 3000;
+  const isCODAvailable = summary.finalGrandTotal < 800;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setShippingInfo({ ...shippingInfo, [e.target.name]: e.target.value });
@@ -287,6 +288,11 @@ export default function OrderCheckoutPage() {
       alert("Address incomplete."); return;
     }
 
+    if (!isPhoneVerified) {
+      toast.error("Please verify your phone number before placing the order.");
+      return;
+    }
+
     if (shippingInfo.countryCode === 'IN' && shippingInfo.gstNumber) {
       if (!GST_REGEX.test(shippingInfo.gstNumber)) {
         setGstError("Invalid Format. Ex: 22AAAAA0000A1Z5");
@@ -310,7 +316,7 @@ export default function OrderCheckoutPage() {
       }
 
       const createdOrderIds: string[] = [];
-      const orderDocsPayload: any[] = []; 
+      const orderDocsPayload: any[] = [];
 
       // 🟢 CRITICAL: We now loop over the ALLOCATED ITEMS array
       const promises = allocatedItems.map(async (cartItem, index) => {
@@ -346,8 +352,9 @@ export default function OrderCheckoutPage() {
 
           payment: {
             method: paymentMethod,
-            total: ledger.finalPaidPrice,      // 👈 Securely derived from the math engine
+            total: paymentMethod === 'cod' ? ledger.finalPaidPrice + (index === 0 ? COD_FEE : 0) : ledger.finalPaidPrice,      // 👈 Securely derived from the math engine
             cartTotal: summary.finalGrandTotal,
+            codFee: paymentMethod === 'cod' && index === 0 ? COD_FEE : 0,
             currency: currencySymbol,
             status: paymentMethod === 'cod' ? 'pending_cod' : 'pending',
             ledger: ledger                     // 👈 Save the full financial breakdown to the DB!
@@ -359,13 +366,17 @@ export default function OrderCheckoutPage() {
         return setDoc(doc(db, 'orders', orderId), orderPayload);
       });
 
-      await Promise.all(promises);
-      setPendingOrderId(checkoutGroupId); 
+      // 🔥 Start background writes concurrently without blocking the UI
+      const orderWritePromise = Promise.all(promises);
+      setPendingOrderId(checkoutGroupId);
 
       // ---------------------------------------------------------
       // 2. PAYMENT FLOWS
       // ---------------------------------------------------------
       if (paymentMethod === 'cod') {
+        toast.loading("Finalizing cash order...", { id: 'save_cod' });
+        await orderWritePromise;
+        toast.dismiss('save_cod');
         clearCart();
         setShowSuccess(true);
       }
@@ -374,9 +385,9 @@ export default function OrderCheckoutPage() {
         if (!loaded) throw new Error("Razorpay failed");
 
         const createRzpOrder = httpsCallable(functions, 'createRazorpayOrder');
-        const { data }: any = await createRzpOrder({ 
+        const { data }: any = await createRzpOrder({
           amount: summary.finalGrandTotal, // 🟢 Use safe summary
-          currency: 'INR', 
+          currency: 'INR',
           applyReferralReward: isRewardValid,
           groupId: checkoutGroupId
         });
@@ -389,11 +400,23 @@ export default function OrderCheckoutPage() {
           description: "Custom T-Shirt Order",
           order_id: data.orderId,
           handler: async function (response: any) {
-            setIsProcessing(false);
-            setShowSuccess(true);
-            setTimeout(() => {
+            setIsProcessing(true);
+            try {
+              toast.loading("Securing order details... Please wait", { id: 'save_ui' });
+              await orderWritePromise; // 🔥 Guarantee data is stored if user pays fast!
+              toast.dismiss('save_ui');
+
+              setShowSuccess(true);
+              setTimeout(() => {
+                navigate('/dashboard/orders');
+              }, 3000);
+            } catch (err) {
+              toast.dismiss('save_ui');
+              toast.error("Error finalizing order context. Wait a moment.");
               navigate('/dashboard/orders');
-            }, 3000);
+            } finally {
+              setIsProcessing(false);
+            }
           },
           prefill: {
             name: shippingInfo.fullName,
@@ -419,7 +442,7 @@ export default function OrderCheckoutPage() {
         });
 
         rzp.open();
-        setIsProcessing(false);
+        setIsProcessing(false); // Stop UI locking immediately to let users pay
       }
       else {
         const createStripe = httpsCallable(functions, 'createStripeIntent');
@@ -429,6 +452,10 @@ export default function OrderCheckoutPage() {
           groupId: checkoutGroupId,
           applyReferralReward: isRewardValid
         });
+
+        toast.loading("Preparing secure checkout...", { id: 'save_stripe' });
+        await orderWritePromise;
+        toast.dismiss('save_stripe');
 
         setStripePromise(loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY));
         setStripeClientSecret(data.clientSecret);
@@ -497,11 +524,43 @@ export default function OrderCheckoutPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-slate-300">Email</Label>
-                    <Input name="email" value={shippingInfo.email || 'Email'} onChange={handleInputChange} className="bg-slate-900/50 border-white/10 text-white focus:border-orange-500/50" />
+                    <Input name="email" disabled={true} value={shippingInfo.email || 'Email'} onChange={handleInputChange} className="bg-slate-900/50 border-white/10 text-white focus:border-orange-500/50" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-slate-300">Phone</Label>
-                    <Input name="phone" value={shippingInfo.phone} onChange={handleInputChange} className="bg-slate-900/50 border-white/10 text-white focus:border-orange-500/50" />
+                    <div className="flex items-center justify-between">
+                      <Label className="text-slate-300">Phone</Label>
+                      {shippingInfo.phone && (
+                        isPhoneVerified ? (
+                          <span className="text-xs text-green-400 flex items-center gap-1 font-medium"><CheckCircle2 className="h-3 w-3" /> Verified</span>
+                        ) : (
+                          <span className="text-xs text-red-400 flex items-center gap-1 font-medium animate-pulse"><AlertCircle className="h-3 w-3" /> Not Verified</span>
+                        )
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        name="phone"
+                        value={shippingInfo.phone}
+                        onChange={(e) => {
+                          handleInputChange(e);
+                          if (isPhoneVerified) setIsPhoneVerified(false);
+                        }}
+                        className={`bg-slate-900/50 text-white flex-1 ${!isPhoneVerified && shippingInfo.phone ? 'border-red-500/50 focus:border-red-500/50' : 'border-white/10 focus:border-orange-500/50'}`}
+                      />
+                      {!isPhoneVerified && (
+                        <Button
+                          type="button"
+                          onClick={() => setShowVerifyModal(true)}
+                          disabled={!shippingInfo.phone || shippingInfo.phone.length < 10}
+                          className="relative overflow-hidden group bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold shrink-0 shadow-[0_0_15px_rgba(234,88,12,0.2)] hover:shadow-[0_0_25px_rgba(234,88,12,0.4)] transition-all duration-300 border-0 h-10 px-5"
+                        >
+                          <span className="relative z-10 flex items-center gap-1.5">
+                            <ShieldCheck className="w-4 h-4" /> Verify
+                          </span>
+                          <div className="absolute inset-0 h-full w-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -564,21 +623,30 @@ export default function OrderCheckoutPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-slate-400 text-xs uppercase font-bold tracking-wider">GSTIN (Optional)</Label>
-                      {gstError && (
-                        <span className="text-red-400 text-xs flex items-center gap-1 animate-pulse">
-                          <AlertCircle className="h-3 w-3" /> {gstError}
-                        </span>
+                      {shippingInfo.gstNumber && shippingInfo.gstNumber.length > 0 && (
+                        GST_REGEX.test(shippingInfo.gstNumber) ? (
+                          <span className="text-green-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 bg-green-500/10 px-2 py-1 rounded border border-green-500/20">
+                            <CheckCircle2 className="h-3 w-3" /> Valid GST
+                          </span>
+                        ) : (
+                          <span className="text-red-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded border border-red-500/20 animate-pulse">
+                            <AlertCircle className="h-3 w-3" /> Invalid Format
+                          </span>
+                        )
                       )}
                     </div>
                     <Input
                       placeholder="Ex: 22AAAAA0000A1Z5"
                       value={shippingInfo.gstNumber}
                       onChange={(e) => {
-                        const val = e.target.value.toUpperCase().replace(/\s/g, '');
+                        const val = e.target.value.toUpperCase().replace(/\space/g, '').replace(/\s/g, '');
                         setShippingInfo({ ...shippingInfo, gstNumber: val });
-                        if (gstError) setGstError(""); 
+                        if (gstError) setGstError("");
                       }}
-                      className={`bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus:border-orange-500/50 ${gstError ? "border-red-500 focus:border-red-500" : ""}`}
+                      className={`bg-slate-950/50 text-white placeholder:text-slate-600 transition-colors ${!shippingInfo.gstNumber ? "border-white/10 focus:border-orange-500/50" :
+                          GST_REGEX.test(shippingInfo.gstNumber) ? "border-green-500/50 focus:border-green-500/50 bg-green-500/5" :
+                            "border-red-500/50 focus:border-red-500/50 bg-red-500/5"
+                        }`}
                       maxLength={15}
                     />
                   </div>
@@ -648,25 +716,25 @@ export default function OrderCheckoutPage() {
 
                 {/* 🟢 NEW: THE GAMIFICATION PROGRESS BAR */}
                 {items.length > 0 && (
-                    <div className="mb-6 flex flex-col gap-3 p-4 rounded-xl border border-orange-500/20 bg-orange-500/5 shadow-inner">
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center text-sm font-medium">
-                                <span className={`flex items-center gap-1.5 ${color}`}>
-                                    {discountPct > 0 ? <Sparkles size={16} /> : <Tag size={16} />}
-                                    {message}
-                                </span>
-                                {discountPct > 0 && (
-                                    <span className="text-green-400 font-bold animate-pulse">-{discountPct * 100}% Off!</span>
-                                )}
-                            </div>
-                            <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                                <div 
-                                    className={`h-full transition-all duration-500 ease-out ${bgProgress}`} 
-                                    style={{ width: `${progress}%` }}
-                                />
-                            </div>
-                        </div>
+                  <div className="mb-6 flex flex-col gap-3 p-4 rounded-xl border border-orange-500/20 bg-orange-500/5 shadow-inner">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-sm font-medium">
+                        <span className={`flex items-center gap-1.5 ${color}`}>
+                          {discountPct > 0 ? <Sparkles size={16} /> : <Tag size={16} />}
+                          {message}
+                        </span>
+                        {discountPct > 0 && (
+                          <span className="text-green-400 font-bold animate-pulse">-{discountPct * 100}% Off!</span>
+                        )}
+                      </div>
+                      <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-500 ease-out ${bgProgress}`}
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
                     </div>
+                  </div>
                 )}
 
                 <div className="space-y-4 mb-6 max-h-48 sm:max-h-60 overflow-y-auto pr-2 custom-scrollbar">
@@ -678,7 +746,7 @@ export default function OrderCheckoutPage() {
                       </div>
                       <div className="flex-1 min-w-0 flex flex-col justify-center">
                         <h4 className="font-medium text-slate-200 text-sm truncate">{item.productTitle}</h4>
-                        
+
                         {/* 🟢 RESTORED: PriceDisplay showing MRP vs Our Price (Qty * Base Price) */}
                         <div className="flex justify-between mt-1 items-center">
                           <span className="text-xs text-slate-400">Qty: {item.quantity}</span>
@@ -690,7 +758,7 @@ export default function OrderCheckoutPage() {
                             align="right"
                           />
                         </div>
-                        
+
                       </div>
                     </div>
                   ))}
@@ -725,7 +793,7 @@ export default function OrderCheckoutPage() {
                     <span>Subtotal ({summary.totalItems} items)</span>
                     <span>{currencySymbol}{summary.mrpSubtotal.toFixed(2)}</span>
                   </div>
-                  
+
                   {summary.totalBulkDiscount > 0 && (
                     <div className="flex justify-between text-sm text-green-400 font-medium">
                       <span>Bulk Savings ({discountPct * 100}%)</span>
@@ -744,13 +812,20 @@ export default function OrderCheckoutPage() {
                     <span>Shipping</span>
                     <span className="text-green-400">Free</span>
                   </div>
+
+                  {paymentMethod === 'cod' && (
+                    <div className="flex justify-between text-sm text-orange-400 font-medium animate-in fade-in slide-in-from-top-1">
+                      <span>COD Handling Fee</span>
+                      <span>+{currencySymbol}{COD_FEE.toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
 
                 <Separator className="bg-white/10 my-4" />
 
                 <div className="flex justify-between text-xl font-bold text-white">
                   <span>Total</span>
-                  <span className="text-orange-400">{currencySymbol}{summary.finalGrandTotal.toFixed(2)}</span>
+                  <span className="text-orange-400">{currencySymbol}{totalPayAmount.toFixed(2)}</span>
                 </div>
 
                 {/* SAVINGS BADGE */}

@@ -139,7 +139,8 @@ async function generateInvoicePDF(orderData, itemsList) {
     const totalSGST = processedItems.reduce((acc, item) => acc + Number(item.sgst), 0);
 
     // Final Grand Total includes the taxes, matching exactly what the user paid Razorpay
-    const finalGrandTotal = totalMRP - totalBulkDiscount - totalReferralDiscount;
+    const codFee = Number(orderData.payment?.codFee || 0);
+    const finalGrandTotal = totalMRP - totalBulkDiscount - totalReferralDiscount + codFee;
 
     // 4. Words
     const amountInWords = numberToWords(finalGrandTotal, currencySymbol);
@@ -174,6 +175,7 @@ async function generateInvoicePDF(orderData, itemsList) {
       mrpTotal: totalMRP.toFixed(2), // Original cart value
       bulkDiscount: totalBulkDiscount > 0 ? totalBulkDiscount.toFixed(2) : null,
       referralDiscount: totalReferralDiscount > 0 ? totalReferralDiscount.toFixed(2) : null,
+      codFee: codFee > 0 ? codFee.toFixed(2) : null,
 
       subTotal: taxableSubTotal.toFixed(2), // The true taxable amount
       cgstTotal: totalCGST.toFixed(2),
@@ -446,7 +448,8 @@ async function sendCODConfirmation(orderData) {
       Amount to Pay on Delivery
     </p>
     <h3 style="margin: 6px 0 0 0; color: #111;">
-      ₹${orderData.price * orderData.quantity - (orderData.referralDiscountApplied ? 100 : 0)}
+      ${orderData.payment?.currency || '₹'}${orderData.payment?.total}
+    </h3>
   </div>
 
   <p style="font-size: 14px; color: #555; line-height: 1.6;">

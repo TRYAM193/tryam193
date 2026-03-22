@@ -255,6 +255,13 @@
         <span>{{currency}} {{mrpTotal}}</span>
       </div>
 
+      {{#if codFee}}
+      <div class="total-row" style="color: #ea580c; font-weight: 600;">
+        <span>COD Handling Fee:</span>
+        <span>+{{currency}} {{codFee}}</span>
+      </div>
+      {{/if}}
+
       {{#if bulkDiscount}}
       <div class="total-row" style="color: #16a34a; font-weight: 600;">
         <span>Volume Savings:</span>

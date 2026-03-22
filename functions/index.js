@@ -92,9 +92,10 @@ async function generateInvoicePDF(orderData, itemsList) {
 
       const allocatedBulk = Number(ledger.allocatedBulkDiscount || 0);
       const allocatedRef = Number(ledger.allocatedReferralDiscount || 0);
+      const codFee = Number(item.payment?.codFee || 0);
 
       // 🟢 The EXACT amount paid for this line item after all discounts
-      const finalLinePaid = Number(ledger.finalPaidPrice || (lineMRP - allocatedBulk - allocatedRef));
+      const finalLinePaid = Number(ledger.finalPaidPrice || (lineMRP - allocatedBulk - allocatedRef + codFee));
 
       totalMRP += lineMRP;
       totalBulkDiscount += allocatedBulk;
@@ -1368,7 +1369,7 @@ const PRODUCT_DIMENSIONS = {
     print: { front: { w: 4200, h: 4350 }, back: { w: 3900, h: 4950 } }
   },
 
-  "mens-polo-tee":{
+  "mens-polo-tee": {
     print: {
       left_chest: { w: 1200, h: 1200 },
       right_chest: { w: 1200, h: 1200 },

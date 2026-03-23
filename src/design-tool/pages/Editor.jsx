@@ -173,6 +173,7 @@ export default function EditorPanel() {
     const [canvasDims, setCanvasDims] = useState({ width: 4500, height: 5400 });
     const [showColorPanel, setShowColorPanel] = useState(false);
     const [isAddingToCart, setIsAddingToCart] = useState(false);
+    const [isAiGeneratingLayout, setIsAiGeneratingLayout] = useState(false);
     const isSidebarOpen = !!activePanel && activePanel !== 'product';
 
     useEffect(() => {
@@ -754,6 +755,27 @@ export default function EditorPanel() {
         }
     };
 
+    // 3. HANDLE AI GENERATED OBJECTS
+    const handleAiObjectsGenerated = (jsonArray) => {
+        if (!jsonArray || jsonArray.length === 0) return;
+
+        const newObjects = jsonArray.map((obj) => {
+            const newId = uuidv4();
+            return {
+                id: newId,
+                customId: newId,
+                type: obj.type || 'image',
+                props: {
+                    ...obj,
+                }
+            };
+        });
+
+        const currentObjects = store.getState().canvas.present;
+        dispatch(setCanvasObjects([...currentObjects, ...newObjects]));
+        setActivePanel(null);
+    };
+
     // --- Canvas Utils (Reduced for speed) ---
 
     const getCleanDataURL = (targetWidth = 1200, isSave = false) => {
@@ -1004,6 +1026,24 @@ export default function EditorPanel() {
                 <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
             </div>
 
+            {/* Global AI Loading Overlay */}
+            {isAiGeneratingLayout && (
+                <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0f172a]/80 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="w-24 h-24 mb-6 relative flex items-center justify-center">
+                        <div className="absolute inset-0 border-t-4 border-orange-500 border-solid rounded-full animate-spin"></div>
+                        <div className="absolute inset-2 border-r-4 border-blue-500 border-solid rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+                        <div className="absolute inset-4 border-b-4 border-pink-500 border-solid rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                        <Sparkles className="absolute text-orange-400 animate-pulse" size={28} />
+                    </div>
+                    <h3 className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-pink-500 text-transparent bg-clip-text animate-pulse">
+                        Cosmic AI is Designing...
+                    </h3>
+                    <p className="text-slate-400 text-sm mt-3 animate-pulse delay-150">
+                        Summoning geometry, typography, and colors from the void.
+                    </p>
+                </div>
+            )}
+
             {/* ================= DESKTOP LAYOUT ================= */}
             {!isMobile && (
                 <div className="main full-height-main">
@@ -1034,6 +1074,9 @@ export default function EditorPanel() {
                             userId={userId}
                             onMergeTemplate={handleMergeTemplate}
                             onReplaceTemplate={handleReplaceTemplate}
+                            onAiObjectsGenerated={handleAiObjectsGenerated}
+                            onAiGenerateStart={() => setIsAiGeneratingLayout(true)}
+                            onAiGenerateEnd={() => setIsAiGeneratingLayout(false)}
                         />
                     </div>
 
@@ -1375,6 +1418,9 @@ export default function EditorPanel() {
                                 onMergeDesign={handleMergeDesign}
                                 onMergeTemplate={handleMergeTemplate}
                                 onReplaceTemplate={handleReplaceTemplate}
+                                onAiObjectsGenerated={handleAiObjectsGenerated}
+                                onAiGenerateStart={() => setIsAiGeneratingLayout(true)}
+                                onAiGenerateEnd={() => setIsAiGeneratingLayout(false)}
                             />
                         </div>
                     </div>

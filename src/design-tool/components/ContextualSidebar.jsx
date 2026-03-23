@@ -9,16 +9,16 @@ import LayersPanel from './LayersPanel';
 import SidebarTemplateList from './SidebarTemplateList';
 
 export default function ContextualSidebar({ activePanel, setActivePanel, addText, addHeading, addSubheading, productId, handleLoadSavedDesign, fabricCanvas, setSelectedId, setActiveTool, selectedId= null, onMergeDesign, userId, onMergeTemplate, 
-  onReplaceTemplate}) {
+  onReplaceTemplate, onAiObjectsGenerated, onAiGenerateStart, onAiGenerateEnd}) {
 
   let ContentComponent = null;
   let title = "";
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
-  const handleAiImageGenerated = (imageUrl) => {
-    if (imageUrl && fabricCanvas) {
-      addImageToCanvas(imageUrl, setSelectedId, setActiveTool, fabricCanvas);
+  const handleAiDesignGenerated = (jsonArray) => {
+    if (onAiObjectsGenerated && jsonArray) {
+      onAiObjectsGenerated(jsonArray);
     }
   };
 
@@ -152,7 +152,15 @@ export default function ContextualSidebar({ activePanel, setActivePanel, addText
       <AiGeneratorModal
         isOpen={isAiModalOpen}
         onClose={() => setIsAiModalOpen(false)}
-        onImageGenerated={handleAiImageGenerated}
+        onDesignGenerated={handleAiDesignGenerated}
+        fabricCanvas={fabricCanvas}
+        productId={productId}
+        onGenerateStart={() => {
+           setIsAiModalOpen(false);
+           setActivePanel(null);
+           if (onAiGenerateStart) onAiGenerateStart();
+        }}
+        onGenerateEnd={onAiGenerateEnd}
       />
     </aside>
   );

@@ -1,11 +1,9 @@
 const functions = require("firebase-functions/v1");
-const { defineJsonSecret } = require("firebase-functions/params");
+const { defineJsonSecret, defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const axios = require("axios");
-const Replicate = require("replicate");
 const path = require("path");
 const fs = require("fs");
-const { StaticCanvas } = require("fabric/node");
 const { registerFont } = require("canvas");
 const Razorpay = require("razorpay");
 const Stripe = require("stripe");
@@ -16,6 +14,7 @@ const chromium = require("@sparticuz/chromium");
 const puppeteer = require("puppeteer-core");
 const { Resend } = require('resend');
 const config = defineJsonSecret("FUNCTIONS_CONFIG_EXPORT");
+const geminiSecret = defineSecret("GEMINI_API_KEY");
 // Initialize Admin
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -1875,17 +1874,24 @@ exports.createStripeIntent = functions
     return { clientSecret: paymentIntent.client_secret };
   });
 
-exports.generateAiImage = functions
-  .runWith({ secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
+exports.generateFabricJson = functions
+  .runWith({ secrets: ["FUNCTIONS_CONFIG_EXPORT", geminiSecret] })
   .https.onCall(async (data, context) => {
-    const { prompt, style } = data;
+    const { prompt, style, canvasWidth, canvasHeight, productInfo } = data;
+    // Require genai locally to avoid global issues if not installed yet
+    const { GoogleGenAI, Type } = require('@google/genai');
+
+    if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Login required');
     const userId = context.auth.uid;
     const today = new Date().toISOString().split('T')[0];
     const docRef = db.collection('users').doc(userId).collection('daily_stats').doc(today);
     const MAX_GEN = 5; // 💎 Visible Limit
-    const replicate = new Replicate({
-      auth: config.value().replicate?.key || "MISSING_KEY",
-    });
+
+    // We expect the key to be set in Firebase Secrets
+    const apiKey = geminiSecret.value() || process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new functions.https.HttpsError('internal', 'Gemini API key is not configured.');
+
+    const ai = new GoogleGenAI({ apiKey });
 
     await db.runTransaction(async (t) => {
       const doc = await t.get(docRef);
@@ -1900,12 +1906,60 @@ exports.generateAiImage = functions
         last_updated: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
     });
+
     try {
-      const output = await replicate.run("black-forest-labs/flux-schnell", { input: { prompt: style ? `${prompt}, ${style} style` : prompt, output_format: "png" } });
-      const imageResponse = await axios.get(output[0], { responseType: 'arraybuffer' });
-      const base64Image = Buffer.from(imageResponse.data, 'binary').toString('base64');
-      return { success: true, image: `data:image/png;base64,${base64Image}` };
-    } catch (error) { throw new functions.https.HttpsError('internal', 'Image generation failed'); }
+      const finalPrompt = style ? `${prompt}. Design strictly in a ${style} style.` : prompt;
+      const cWidth = canvasWidth || 800;
+      const cHeight = canvasHeight || 800;
+      const pInfo = productInfo || "a blank canvas";
+
+      const systemInstruction = `You are an expert T-shirt UI designer. 
+You must output a JSON array of objects representing a design layout compatible with Fabric.js.
+The design is for ${pInfo}.
+The canvas dimensions are exactly ${cWidth}x${cHeight}. Use appropriate positioning (left, top) within these bounds, and dimensions (width, height, radius).
+Only use these object types: "text", "rect", "circle", "triangle".
+Use beautiful, modern color palettes (hex codes for 'fill').
+For 'text' objects, use visually appealing emojis or standard web fonts in 'fontFamily' (e.g. "Arial", "Impact", "Courier New", "Georgia", "Verdana").
+Ensure the design looks good on a t-shirt.`;
+
+      const responseSchema = {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            type: { type: Type.STRING, enum: ["text", "rect", "circle", "triangle"] },
+            left: { type: Type.NUMBER },
+            top: { type: Type.NUMBER },
+            fill: { type: Type.STRING },
+            text: { type: Type.STRING },
+            fontSize: { type: Type.NUMBER },
+            fontFamily: { type: Type.STRING },
+            fontWeight: { type: Type.STRING, enum: ["normal", "bold"] },
+            width: { type: Type.NUMBER },
+            height: { type: Type.NUMBER },
+            radius: { type: Type.NUMBER }
+          },
+          required: ["type", "left", "top", "fill"]
+        }
+      };
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: finalPrompt,
+        config: {
+          systemInstruction: systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: responseSchema,
+        }
+      });
+
+      const jsonOutput = JSON.parse(response.text);
+      return { success: true, objects: jsonOutput };
+
+    } catch (error) {
+      console.error("Gemini Error:", error);
+      throw new functions.https.HttpsError('internal', 'Design generation failed');
+    }
   });
 
 exports.saveTshirtDesign = functions.https.onCall(async (data, context) => {

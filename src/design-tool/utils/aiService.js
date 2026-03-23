@@ -1,15 +1,15 @@
 // src/design-tool/utils/aiService.js
 import { getFunctions, httpsCallable } from "firebase/functions";
 
-export const generateImageFromPrompt = async (prompt, style) => {
+export const generateDesignJsonFromPrompt = async (prompt, style, canvasWidth, canvasHeight, productInfo) => {
   const functions = getFunctions();
-  const generateAiImage = httpsCallable(functions, 'generateAiImage');
+  const generateFabricJson = httpsCallable(functions, 'generateFabricJson');
 
   try {
-    const result = await generateAiImage({ prompt, style });
+    const result = await generateFabricJson({ prompt, style, canvasWidth, canvasHeight, productInfo });
     
     if (result.data.success) {
-      return result.data.image; // Returns the Data URI
+      return result.data.objects; // Returns the JSON array for Fabric.js
     } else {
       throw new Error("Generation failed");
     }

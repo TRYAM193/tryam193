@@ -15,6 +15,7 @@
   "dependencies": {
     "@csstools/css-parser-algorithms": "^3.0.5",
     "@csstools/css-tokenizer": "^3.0.4",
+    "@google/genai": "^1.46.0",
     "@sparticuz/chromium": "^143.0.4",
     "canvas": "^3.2.0",
     "fabric": "^7.1.0",

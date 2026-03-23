@@ -97,7 +97,7 @@ export function ThreeDPreviewModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="w-[100vw] h-[100vh] p-0 gap-0 bg-zinc-950 border-zinc-800 no-scrollbar flex flex-col overflow-hidden rounded-xl shadow-2xl">
+            <DialogContent className="w-[100vw] h-[90vh] p-0 gap-0 bg-zinc-950 border-zinc-800 no-scrollbar flex flex-col overflow-hidden rounded-xl shadow-2xl">
                 <DialogTitle className="sr-only">Preview Design</DialogTitle>
                 <DialogDescription className="sr-only">Preview your design in 2D or 3D</DialogDescription>
 
@@ -250,16 +250,16 @@ export function ThreeDPreviewModal({
                                             )
                                         )}
 
-                                       {/* ✨ LAYER 4: HIGHLIGHTS (Z-30) */}
+                                        {/* ✨ LAYER 4: HIGHLIGHTS (Z-30) */}
                                         {(highlights[activeSide] || mockups[activeSide]) && (
-                                            <img 
-                                                src={highlights[activeSide] || mockups[activeSide]} 
-                                                alt={`${activeSide} highlights`} 
+                                            <img
+                                                src={highlights[activeSide] || mockups[activeSide]}
+                                                alt={`${activeSide} highlights`}
                                                 className="absolute inset-0 w-full h-full object-contain z-30 pointer-events-none"
-                                                style={{ 
-                                                    mixBlendMode: 'screen', 
-                                                    opacity: highlightOpacity 
-                                                }} 
+                                                style={{
+                                                    mixBlendMode: 'screen',
+                                                    opacity: highlightOpacity
+                                                }}
                                             />
                                         )}
 
@@ -290,10 +290,10 @@ export function ThreeDPreviewModal({
                                                     className="absolute inset-0 w-full h-full object-cover"
                                                     style={{ mixBlendMode: 'multiply' }}
                                                 />
-                                                <img 
-                                                    src={highlights[side] || mockups[side]} 
-                                                    alt={side} 
-                                                    className="absolute inset-0 w-full h-full object-cover" 
+                                                <img
+                                                    src={highlights[side] || mockups[side]}
+                                                    alt={side}
+                                                    className="absolute inset-0 w-full h-full object-cover"
                                                     style={{ mixBlendMode: 'screen', opacity: highlightOpacity }}
                                                 />
                                             </button>

@@ -131,7 +131,6 @@ export function AiGeneratorModal({ isOpen, onClose, onDesignGenerated, fabricCan
               </div>
               <span>Cosmic AI</span>
             </div>
-            <span className="text-[10px] uppercase font-black tracking-wider bg-gradient-to-r from-orange-500 to-red-500 text-white px-2.5 py-1 rounded-full shadow-lg shadow-orange-500/20">PRO</span>
           </DialogTitle>
         </div>
 

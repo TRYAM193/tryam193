@@ -2,7 +2,7 @@ import { toast } from 'sonner';
 import { getAuth } from 'firebase/auth';
 
 const getApiUrl = (endpoint) => {
-  const baseUrl = import.meta.env.VITE_PYTHON_API_URL || "https://bg-remover-786672387224.us-central1.run.app";
+  const baseUrl = import.meta.env.VITE_PYTHON_API_URL;
   return `${baseUrl}${endpoint}`;
 };
 
@@ -19,7 +19,7 @@ export const processBackgroundRemoval = async (imageSrc) => {
     const token = await currentUser.getIdToken();
     const response = await fetch(imageSrc);
     const blob = await response.blob();
-    
+
     const formData = new FormData();
     formData.append('file', blob, 'image.png');
 
@@ -59,7 +59,7 @@ export const processUpscale = async (imageSrc) => {
     const token = await currentUser.getIdToken();
     const response = await fetch(imageSrc);
     const blob = await response.blob();
-    
+
     const formData = new FormData();
     formData.append('file', blob, 'image.png');
 
@@ -70,8 +70,8 @@ export const processUpscale = async (imageSrc) => {
     });
 
     if (apiResponse.status === 429) {
-       toast.error("Daily Limit Reached");
-       return null;
+      toast.error("Daily Limit Reached");
+      return null;
     }
     if (!apiResponse.ok) throw new Error("Server Error");
 

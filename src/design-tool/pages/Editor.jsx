@@ -173,8 +173,11 @@ export default function EditorPanel() {
     const [canvasDims, setCanvasDims] = useState({ width: 4500, height: 5400 });
     const [showColorPanel, setShowColorPanel] = useState(false);
     const [isAddingToCart, setIsAddingToCart] = useState(false);
-    const [isAiGeneratingLayout, setIsAiGeneratingLayout] = useState(false);
+    const [aiLoadingState, setAiLoadingState] = useState({ active: false, title: 'Cosmic AI is Processing...', subtitle: 'Please wait.' });
     const isSidebarOpen = !!activePanel && activePanel !== 'product';
+
+    const handleAiLoadingStart = (title, subtitle) => setAiLoadingState({ active: true, title, subtitle });
+    const handleAiLoadingEnd = () => setAiLoadingState({ active: false, title: '', subtitle: '' });
 
     useEffect(() => {
         if (!urlTemplateId && !urlProductId && !editingDesignId) {
@@ -816,7 +819,6 @@ export default function EditorPanel() {
 
         return dataUrl;
     };
-    console.log(currentView);
 
     const captureCurrentCanvas = () => {
         const url = getCleanDataURL(1200);
@@ -1027,7 +1029,7 @@ export default function EditorPanel() {
             </div>
 
             {/* Global AI Loading Overlay */}
-            {isAiGeneratingLayout && (
+            {aiLoadingState.active && (
                 <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0f172a]/80 backdrop-blur-md animate-in fade-in duration-300">
                     <div className="w-24 h-24 mb-6 relative flex items-center justify-center">
                         <div className="absolute inset-0 border-t-4 border-orange-500 border-solid rounded-full animate-spin"></div>
@@ -1036,11 +1038,17 @@ export default function EditorPanel() {
                         <Sparkles className="absolute text-orange-400 animate-pulse" size={28} />
                     </div>
                     <h3 className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-pink-500 text-transparent bg-clip-text animate-pulse">
-                        Cosmic AI is Designing...
+                        {aiLoadingState.title}
                     </h3>
                     <p className="text-slate-400 text-sm mt-3 animate-pulse delay-150">
-                        Summoning geometry, typography, and colors from the void.
+                        {aiLoadingState.subtitle}
                     </p>
+
+                    <div className="absolute bottom-12 px-6 w-full text-center">
+                        <p className="text-[11px] text-amber-200/90 font-medium tracking-wider drop-shadow-md animate-in fade-in slide-in-from-bottom-2 duration-700 delay-500">
+                            <strong className="text-amber-300 tracking-widest">FRIENDLY CAUTION:</strong> The Cosmic AI is currently experimental and occasionally dreams up wild ideas!
+                        </p>
+                    </div>
                 </div>
             )}
 
@@ -1061,6 +1069,8 @@ export default function EditorPanel() {
                         dpiIssues={dpiIssuesList}
                         isAdmin={isAdmin}
                         storageFolder={`users/${user?.uid}/designs/${editingDesignId}/images` || 'Anononymus'}
+                        onAiLoadingEnd={handleAiLoadingEnd}
+                        onAiLoadingStart={handleAiLoadingStart}
                     />
 
                     {/* Conditional Check */}
@@ -1075,8 +1085,10 @@ export default function EditorPanel() {
                             onMergeTemplate={handleMergeTemplate}
                             onReplaceTemplate={handleReplaceTemplate}
                             onAiObjectsGenerated={handleAiObjectsGenerated}
-                            onAiGenerateStart={() => setIsAiGeneratingLayout(true)}
-                            onAiGenerateEnd={() => setIsAiGeneratingLayout(false)}
+                            onAiGenerateStart={() => handleAiLoadingStart('Cosmic AI is Designing...', 'Summoning geometry, typography, and colors from the void.')}
+                            onAiGenerateEnd={handleAiLoadingEnd}
+                            onAiLoadingStart={handleAiLoadingStart}
+                            onAiLoadingEnd={handleAiLoadingEnd}
                         />
                     </div>
 
@@ -1163,7 +1175,7 @@ export default function EditorPanel() {
 
                     <aside className={`right-panel no-scrollbar ${(selectedId ? showProperties : showColorPanel) ? 'active' : ''}`}>
                         {selectedId ? (
-                            <RightSidebarTabs id={selectedId} type={activeTool} object={canvasObjects.find((obj) => obj.id === selectedId)} updateObject={updateObject} removeObject={removeObject} addText={addText} fabricCanvas={fabricCanvas} setSelectedId={setSelectedId} updateDpiForObject={updateDpiForObject} printDimensions={{ w: productData?.print_areas?.[currentView].width, h: productData?.print_areas?.[currentView].height }} />
+                            <RightSidebarTabs id={selectedId} type={activeTool} object={canvasObjects.find((obj) => obj.id === selectedId)} updateObject={updateObject} removeObject={removeObject} addText={addText} fabricCanvas={fabricCanvas} setSelectedId={setSelectedId} updateDpiForObject={updateDpiForObject} printDimensions={{ w: productData?.print_areas?.[currentView].width, h: productData?.print_areas?.[currentView].height }} onAiLoadingStart={handleAiLoadingStart} onAiLoadingEnd={handleAiLoadingEnd} />
                         ) : (productData ? (
                             <div className="p-2 flex flex-col h-full overflow-y-auto">
                                 <div className="mobile-panel-header">
@@ -1419,8 +1431,10 @@ export default function EditorPanel() {
                                 onMergeTemplate={handleMergeTemplate}
                                 onReplaceTemplate={handleReplaceTemplate}
                                 onAiObjectsGenerated={handleAiObjectsGenerated}
-                                onAiGenerateStart={() => setIsAiGeneratingLayout(true)}
-                                onAiGenerateEnd={() => setIsAiGeneratingLayout(false)}
+                                onAiGenerateStart={() => handleAiLoadingStart('Cosmic AI is Designing...', 'Summoning geometry, typography, and colors from the void.')}
+                                onAiGenerateEnd={handleAiLoadingEnd}
+                                onAiLoadingStart={handleAiLoadingStart}
+                                onAiLoadingEnd={handleAiLoadingEnd}
                             />
                         </div>
                     </div>

@@ -210,7 +210,7 @@ function liveUpdateFabric(fabricCanvas, id, updates, currentLiveProps, object) {
   fabricCanvas.requestRenderAll();
 }
 
-export default function Toolbar({ id, type, object, updateObject, updateDpiForObject, printDimensions = { w: 4500, h: 5400 }, fabricCanvas }) {
+export default function Toolbar({ id, type, object, updateObject, updateDpiForObject, printDimensions = { w: 4500, h: 5400 }, fabricCanvas, onAiLoadingStart, onAiLoadingEnd }) {
   const props = object?.props || {};
   const [liveProps, setLiveProps] = useState(props);
 
@@ -246,6 +246,7 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
     if (!currentSrc) { alert('No image source found!'); return; }
     try {
       setIsRemovingBg(true);
+      if (onAiLoadingStart) onAiLoadingStart('Removing Background...', 'The Cosmic AI is separating the subject from the void.');
       const newImageUrl = await processBackgroundRemoval(currentSrc);
       const fabricObj = fabricCanvas.getObjects().find((o) => o.customId === id);
       if (fabricObj && newImageUrl) {
@@ -259,7 +260,10 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
         }
       }
     } catch (error) { console.error('BG Removal Error', error); alert('Failed. Try again.'); }
-    finally { setIsRemovingBg(false); }
+    finally { 
+      setIsRemovingBg(false); 
+      if (onAiLoadingEnd) onAiLoadingEnd();
+    }
   }
 
   // ✅ AUTO DPI FIX

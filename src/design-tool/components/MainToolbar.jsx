@@ -14,7 +14,8 @@ import addSvgToRedux from '../objectAdders/Svg';
 export default function MainToolbar({
     activePanel, onSelectTool, setSelectedId, setActiveTool,
     isAdmin, brandDisplay, fabricCanvas, productId, storageFolder,
-    urlColor, urlSize, dpiIssues = []
+    urlColor, urlSize, dpiIssues = [],
+    onAiLoadingStart, onAiLoadingEnd
 }) {
 
     const ToolButton = ({ icon: Icon, label, isActive, onClick, tool }) => (
@@ -100,6 +101,7 @@ export default function MainToolbar({
     const handleFixQuality = async (issue) => {
         if (isFixing) return;
         setIsFixing(issue.id);
+        if (onAiLoadingStart) onAiLoadingStart('Enhancing Image...', 'The Cosmic AI is upscaling and sharpening the details.');
 
         try {
             // 1. Get the Blob (Temporary)
@@ -127,6 +129,7 @@ export default function MainToolbar({
             // Optionally toast.error("Failed to save enhanced image")
         } finally {
             setIsFixing(null);
+            if (onAiLoadingEnd) onAiLoadingEnd();
         }
     };
 

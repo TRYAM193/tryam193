@@ -64,6 +64,8 @@ export default function RightSidebarTabs(props) {
             fabricCanvas={props.fabricCanvas}
             updateDpiForObject={props.updateDpiForObject}
             printDimensions={props.printDimensions}
+            onAiLoadingStart={props.onAiLoadingStart}
+            onAiLoadingEnd={props.onAiLoadingEnd}
           />
         )}
 

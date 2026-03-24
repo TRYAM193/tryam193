@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { FiLoader, FiCpu, FiZap } from 'react-icons/fi';
 import { generateDesignJsonFromPrompt } from '../utils/aiService';
 import { useDailyLimits } from '../../hooks/useDailyLimits';
-import { Loader2, Sparkles, Lock } from 'lucide-react';
+import { Loader2, Sparkles, Lock, ImagePlus, X } from 'lucide-react';
 
 const STYLES = [
   { id: 'none', label: 'No Style', icon: '🚫' },
@@ -22,10 +22,76 @@ export function AiGeneratorModal({ isOpen, onClose, onDesignGenerated, fabricCan
   const [selectedStyle, setSelectedStyle] = useState('none');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
+  const [referenceImages, setReferenceImages] = useState([]);
   const { genRemaining, genLimit, incrementGen } = useDailyLimits();
 
+  const compressImage = (file) => {
+    return new Promise((resolve, reject) => {
+      const isSvg = file.type === 'image/svg+xml';
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (isSvg) {
+          resolve({ base64: e.target.result.split(',')[1], mimeType: file.type, previewUrl: e.target.result });
+          return;
+        }
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let { width, height } = img;
+          const MAX_SIZE = 800;
+          if (width > height && width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          } else if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          resolve({
+            base64: dataUrl.split(',')[1],
+            mimeType: 'image/jpeg',
+            previewUrl: dataUrl
+          });
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileUpload = async (e) => {
+    if (!e.target.files?.length) return;
+    const newFiles = Array.from(e.target.files);
+
+    if (referenceImages.length + newFiles.length > 5) {
+      setError('You can only upload up to 5 reference images.');
+      return;
+    }
+
+    try {
+      setIsGenerating(true);
+      setError('');
+      const processed = await Promise.all(newFiles.map(compressImage));
+      setReferenceImages(prev => [...prev, ...processed.map(p => ({ ...p, id: Math.random().toString(36).substr(2, 9) }))]);
+    } catch (err) {
+      setError('Failed to process one or more images.');
+    } finally {
+      setIsGenerating(false);
+      e.target.value = '';
+    }
+  };
+
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() && referenceImages.length === 0) {
+      setError('Please provide a prompt or an image.');
+      return;
+    }
     setIsGenerating(true);
     setError('');
 
@@ -38,12 +104,13 @@ export function AiGeneratorModal({ isOpen, onClose, onDesignGenerated, fabricCan
       const cWidth = fabricCanvas ? fabricCanvas.width : 800;
       const cHeight = fabricCanvas ? fabricCanvas.height : 800;
       const pInfo = productId ? `product ID: ${productId}` : "a blank canvas";
-      const designJson = await generateDesignJsonFromPrompt(prompt, selectedStyle, cWidth, cHeight, pInfo);
-      
+      const designJson = await generateDesignJsonFromPrompt(prompt, selectedStyle, cWidth, cHeight, pInfo, referenceImages);
+
       onDesignGenerated(designJson);
       incrementGen(); // Optimistically update the UI limit
-      
+
       setPrompt('');
+      setReferenceImages([]);
     } catch (err) {
       console.error(err);
       setError('Failed to generate. Please try again.');
@@ -62,7 +129,7 @@ export function AiGeneratorModal({ isOpen, onClose, onDesignGenerated, fabricCan
               <div className="p-2 bg-orange-500/20 rounded-lg">
                 <FiCpu className="text-orange-500" size={18} />
               </div>
-              <span>Cosmic AI Layout</span>
+              <span>Cosmic AI</span>
             </div>
             <span className="text-[10px] uppercase font-black tracking-wider bg-gradient-to-r from-orange-500 to-red-500 text-white px-2.5 py-1 rounded-full shadow-lg shadow-orange-500/20">PRO</span>
           </DialogTitle>
@@ -83,9 +150,34 @@ export function AiGeneratorModal({ isOpen, onClose, onDesignGenerated, fabricCan
             />
           </div>
 
+          {/* Reference Images */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-pink-500"></span> References ({referenceImages.length}/5)
+              </label>
+              <label className={`cursor-pointer flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${referenceImages.length >= 5 ? 'bg-slate-800 text-slate-500 opacity-50 cursor-not-allowed' : 'text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20'}`}>
+                <ImagePlus size={14} /> Add Media
+                <input type="file" multiple accept="image/png, image/jpeg, image/webp, image/svg+xml" className="hidden" onChange={handleFileUpload} disabled={referenceImages.length >= 5} />
+              </label>
+            </div>
+            {referenceImages.length > 0 && (
+              <div className="flex flex-wrap gap-3 mt-2">
+                {referenceImages.map(img => (
+                  <div key={img.id} className="relative w-16 h-16 rounded-xl border border-white/10 bg-black/40 group overflow-hidden shadow-inner">
+                    <img src={img.previewUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="Reference" />
+                    <button onClick={() => setReferenceImages(prev => prev.filter(i => i.id !== img.id))} className="absolute top-1 right-1 p-0.5 bg-red-500/90 text-white rounded-full opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all shadow-lg hover:bg-red-500">
+                      <X size={12} strokeWidth={3} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Style Selector */}
           <div className="space-y-3">
-             <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span> Choose a Style
             </label>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -94,8 +186,8 @@ export function AiGeneratorModal({ isOpen, onClose, onDesignGenerated, fabricCan
                   key={style.id}
                   onClick={() => setSelectedStyle(style.id)}
                   className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-200 group ${selectedStyle === style.id
-                      ? 'bg-gradient-to-b from-blue-600/20 to-purple-600/20 border-blue-500/50 text-white shadow-[0_0_15px_rgba(59,130,246,0.2)] scale-105'
-                      : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 hover:border-white/20'
+                    ? 'bg-gradient-to-b from-blue-600/20 to-purple-600/20 border-blue-500/50 text-white shadow-[0_0_15px_rgba(59,130,246,0.2)] scale-105'
+                    : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 hover:border-white/20'
                     }`}
                 >
                   <span className={`text-2xl mb-1.5 transition-transform duration-300 ${selectedStyle === style.id ? 'scale-110 drop-shadow-md' : 'group-hover:scale-110 grayscale group-hover:grayscale-0'}`}>{style.icon}</span>
@@ -136,7 +228,7 @@ export function AiGeneratorModal({ isOpen, onClose, onDesignGenerated, fabricCan
         <div className="p-5 border-t border-white/10 bg-black/20 flex-shrink-0">
           <Button
             onClick={handleGenerate}
-            disabled={isGenerating || !prompt.trim() || genRemaining === 0}
+            disabled={isGenerating || (!prompt.trim() && referenceImages.length === 0) || genRemaining === 0}
             className="w-full h-12 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-bold tracking-wider shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-all hover:shadow-[0_0_25px_rgba(79,70,229,0.5)] active:scale-[0.98] border-0 rounded-xl"
           >
             {isGenerating ? (

@@ -16,7 +16,6 @@ export function useDailyLimits() {
 
     const today = new Date().toISOString().split('T')[0];
     const docRef = doc(db, `users/${user.uid}/daily_stats/${today}`);
-    console.log(today)
 
     const unsubscribe = onSnapshot(
       docRef,

@@ -1877,7 +1877,7 @@ exports.createStripeIntent = functions
 exports.generateFabricJson = functions
   .runWith({ secrets: ["FUNCTIONS_CONFIG_EXPORT", geminiSecret] })
   .https.onCall(async (data, context) => {
-    const { prompt, style, canvasWidth, canvasHeight, productInfo } = data;
+    const { prompt, style, canvasWidth, canvasHeight, productInfo, referenceImages } = data;
     // Require genai locally to avoid global issues if not installed yet
     const { GoogleGenAI, Type } = require('@google/genai');
 
@@ -1914,6 +1914,7 @@ exports.generateFabricJson = functions
       const pInfo = productInfo || "a blank canvas";
 
       const systemInstruction = `You are an expert T-shirt UI designer. 
+If reference images or SVGs are provided, meticulously analyze their visual layout. Accurately extract all visible text and copy their positioning relative to the canvas. Identify shapes (rectangles, circles, triangles) and use them to construct an identical or strongly inspired valid Fabric.js layout matching the reference!
 You must output a JSON array of objects representing a design layout compatible with Fabric.js.
 The design is for ${pInfo}.
 The canvas dimensions are exactly ${cWidth}x${cHeight}. Use appropriate positioning (left, top) within these bounds, and dimensions (width, height, radius).
@@ -1943,9 +1944,22 @@ Ensure the design looks good on a t-shirt.`;
         }
       };
 
+      let finalContents = finalPrompt;
+      if (referenceImages && referenceImages.length > 0) {
+        finalContents = [finalPrompt];
+        for (const img of referenceImages) {
+          finalContents.push({
+            inlineData: {
+              data: img.base64,
+              mimeType: img.mimeType
+            }
+          });
+        }
+      }
+
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: finalPrompt,
+        contents: finalContents,
         config: {
           systemInstruction: systemInstruction,
           responseMimeType: 'application/json',

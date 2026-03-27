@@ -145,7 +145,7 @@ export default function ContextualSidebar({ activePanel, setActivePanel, addText
         </button>
       </div>
 
-      <div className="flex-grow overflow-y-auto custom-scrollbar">
+      <div className="flex-grow overflow-y-auto custom-scrollbar overscroll-none">
         {FinalContent}
       </div>
 

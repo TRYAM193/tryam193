@@ -176,6 +176,50 @@ export default function EditorPanel() {
     const [aiLoadingState, setAiLoadingState] = useState({ active: false, title: 'Cosmic AI is Processing...', subtitle: 'Please wait.' });
     const isSidebarOpen = !!activePanel && activePanel !== 'product';
 
+    // Mobile swipe-to-close drawer logic
+    const [touchStartY, setTouchStartY] = useState(null);
+    const [dragOffset, setDragOffset] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+
+    const handleTouchStart = (e) => {
+        const scrollable = e.target.closest('.overflow-y-auto');
+        if (scrollable && scrollable.scrollTop > 0) {
+            // Don't drag the drawer if the content is scrolled down
+            return;
+        }
+        setTouchStartY(e.touches[0].clientY);
+        setIsDragging(true);
+    };
+
+    const handleTouchMove = (e) => {
+        if (!touchStartY || !isDragging) return;
+        const deltaY = e.touches[0].clientY - touchStartY;
+        // Only allow dragging down
+        if (deltaY > 0) {
+            setDragOffset(deltaY);
+        } else {
+            setDragOffset(0);
+        }
+    };
+
+    const handleTouchEnd = () => {
+        setIsDragging(false);
+        if (dragOffset > 150) { // Configurable threshold length
+            setActivePanel(null);
+            setTimeout(() => setDragOffset(0), 300); // Give time for close animation
+        } else {
+            setDragOffset(0); // Snap back
+        }
+        setTouchStartY(null);
+    };
+
+    useEffect(() => {
+        if (!isSidebarOpen) {
+            setDragOffset(0);
+            setIsDragging(false);
+        }
+    }, [isSidebarOpen]);
+
     const handleAiLoadingStart = (title, subtitle) => setAiLoadingState({ active: true, title, subtitle });
     const handleAiLoadingEnd = () => setAiLoadingState({ active: false, title: '', subtitle: '' });
 
@@ -535,8 +579,6 @@ export default function EditorPanel() {
             const itemToEdit = cartItems.find(i => i.id === editCartId);
 
             if (itemToEdit && itemToEdit.designData) {
-                console.log("Loading Cart Item for Edit:", itemToEdit);
-
                 setIsEditMode(true);
 
                 if (itemToEdit.variant?.color) {
@@ -1341,10 +1383,10 @@ export default function EditorPanel() {
                             currentView={currentView}
                             viewStates={viewStates}
                             productData={{
-                                productId: urlProductId || currentDesign?.productConfig?.productId,
+                                productId: urlProductId || currentDesign?.productConfig?.productId || productData.id,
                                 color: urlColor || currentDesign?.productConfig?.variantColor,
                                 size: urlSize || currentDesign?.productConfig?.variantSize,
-                                print_areas: productData.print_areas
+                                print_areas: productData?.print_areas
                             }}
                             fabricCanvas={fabricCanvas}
                             currentObjects={canvasObjects}
@@ -1370,7 +1412,7 @@ export default function EditorPanel() {
                     dpiIssues={dpiIssuesList} // 👈 Pass the List
                     // --- 4. Pass Product Logic (The Big One) ---
                     productProps={{
-                        id: urlProductId || currentDesign?.productConfig?.productId,
+                        id: urlProductId || currentDesign?.productConfig?.productId || productData.id,
                         product: productData,
                         selectedColor: canvasBg || currentDesign?.productConfig?.variantColor, // Or your local state for color
                         setColor: handleColorChange,
@@ -1407,9 +1449,23 @@ export default function EditorPanel() {
                     />
 
                     {/* 2. Drawer (Slides up/down) */}
-                    <div className={`sidebar-container-mobile ${isSidebarOpen ? 'open' : ''}`}>
+                    <div
+                        className={`sidebar-container-mobile ${isSidebarOpen ? 'open' : ''}`}
+                        style={isSidebarOpen && dragOffset > 0 ? {
+                            transform: `translateY(calc(100% * ${isSidebarOpen ? 0 : 1} + ${dragOffset}px))`,
+                            transition: isDragging ? 'none' : 'transform 0.3s ease-out'
+                        } : {
+                            transition: isDragging ? 'none' : 'transform 0.3s ease-out'
+                        }}
+                        onTouchStart={handleTouchStart}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
+                    >
                         {/* Drag Handle Visual */}
-                        <div className="w-full flex justify-center pt-3 pb-1 bg-[#1e293b]" onClick={() => setActivePanel(null)}>
+                        <div
+                            className="w-full flex justify-center pt-3 py-3 bg-[#1e293b] touch-pan-x cursor-grab active:cursor-grabbing"
+                            onClick={() => setActivePanel(null)}
+                        >
                             <div className="w-12 h-1.5 bg-white/20 rounded-full" />
                         </div>
 

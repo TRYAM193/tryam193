@@ -22,9 +22,11 @@ export default function SidebarTemplateList({ onMerge, onReplace }) {
     const handleScroll = () => setOpenMenuId(null);
 
     document.addEventListener('mousedown', handleClose);
+    document.addEventListener('touchstart', handleClose); // ✅ Mobile support
     window.addEventListener('scroll', handleScroll, true);
     return () => {
       document.removeEventListener('mousedown', handleClose);
+      document.removeEventListener('touchstart', handleClose);
       window.removeEventListener('scroll', handleScroll, true);
     };
   }, []);
@@ -97,7 +99,12 @@ export default function SidebarTemplateList({ onMerge, onReplace }) {
   }
 
   return (
-    <div className="h-full overflow-y-auto custom-scrollbar">
+    <div
+      className="h-full overflow-y-auto custom-scrollbar"
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
+    >
       <div className="grid grid-cols-2 gap-3 p-3 pb-24">
         {templates.map((template) => (
           <div
@@ -117,10 +124,10 @@ export default function SidebarTemplateList({ onMerge, onReplace }) {
               )}
 
               {/* Gradient Overlay */}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
-              {/* Menu Button */}
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 transform translate-y-2 group-hover:translate-y-0">
+              {/* Menu Button — always visible on mobile, hover-reveal on desktop */}
+              <div className="absolute top-2 right-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
                 <button
                   onClick={(e) => handleOpenMenu(e, template.id)}
                   className={`p-2 rounded-full backdrop-blur-md transition-colors shadow-xl ${openMenuId === template.id ? 'opacity-100 bg-white text-orange-600' : 'text-white bg-black/60'}`}

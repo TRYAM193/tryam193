@@ -1,53 +1,94 @@
-// src/design-tool/components/LayersPanel.jsx
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { FiTrash2 } from 'react-icons/fi';
+import { FiTrash2, FiGrid } from 'react-icons/fi';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 import { reorderLayers } from '../functions/layer';
 import removeObject from '../functions/remove';
 import LayerPreview from './LayerPreview';
 
-const DraggableLayerItem = ({ object, index, isSelected, onSelect, onDelete }) => (
-    <Draggable draggableId={String(object.id)} index={index}>
-        {(provided, snapshot) => (
+const SortableLayerItem = ({ id, object, isSelected, onSelect, onDelete }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: String(id) });
+
+    const style = {
+        // Only translate Y — never X. Prevents sideways slide-in animation.
+        transform: transform
+            ? `translate3d(0px, ${transform.y}px, 0) scaleX(${transform.scaleX ?? 1}) scaleY(${transform.scaleY ?? 1})`
+            : undefined,
+        transition,
+        // When this item is the active dragged one, make it look lifted
+        ...(isDragging ? {
+            boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+            background: 'rgb(51 65 85 / 0.97)',
+            borderColor: 'rgb(99 102 241 / 0.6)',
+            opacity: 1,
+            zIndex: 50,
+        } : {})
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={`layer-item select-none p-2 flex items-center justify-between rounded-md mb-2 border transition-[box-shadow,background,border-color] cursor-grab active:cursor-grabbing group
+                ${isSelected && !isDragging
+                    ? 'bg-orange-500/10 border-orange-500/50'
+                    : 'bg-slate-800/40 border-white/5 hover:bg-white/5 hover:border-white/10'}`}
+        >
             <div
-                ref={provided.innerRef}
-                {...provided.draggableProps}
-                {...provided.dragHandleProps}
-                className={`layer-item p-3 flex items-center justify-between rounded-md mb-2 border transition-all cursor-pointer
-                    ${isSelected 
-                        ? 'bg-orange-500/10 border-orange-500/50' 
-                        : 'bg-slate-800/40 border-white/5 hover:bg-white/5 hover:border-white/10'}
-                    ${snapshot.isDragging ? 'opacity-50 shadow-lg' : ''}`}
+                className="flex items-center gap-2 overflow-hidden flex-1"
+                style={{ touchAction: 'none' }}
+                {...attributes}
+                {...listeners}
                 onClick={() => onSelect(object.id)}
             >
-                <div className="flex items-center gap-3 overflow-hidden">
-                    <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center border border-white/5 overflow-hidden flex-shrink-0">
-                        <LayerPreview object={object} />
-                    </div>
-
-                    <span className={`text-xs font-medium truncate ${isSelected ? 'text-white' : 'text-slate-400'}`}>
-                        {object.type === 'text'
-                            ? object.props?.text?.substring(0, 15) || 'Text'
-                            : object.type.charAt(0).toUpperCase() + object.type.slice(1)}
-                    </span>
+                <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center border border-white/5 overflow-hidden flex-shrink-0 pointer-events-none">
+                    <LayerPreview object={object} />
                 </div>
 
-                <button
-                    title="Delete"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(object.id);
-                    }}
-                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                >
-                    <FiTrash2 size={14} />
-                </button>
+                <span className={`text-xs ml-1 font-medium truncate pointer-events-none ${isSelected ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>
+                    {object.type === 'text'
+                        ? object.props?.text?.substring(0, 15) || 'Text'
+                        : object.type.charAt(0).toUpperCase() + object.type.slice(1)}
+                </span>
             </div>
-        )}
-    </Draggable>
-);
+
+            <button
+                title="Delete Layer"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(object.id);
+                }}
+                className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors ml-2 flex-shrink-0 z-10"
+            >
+                <FiTrash2 size={14} />
+            </button>
+        </div>
+    );
+};
 
 export default function LayersPanel({ selectedId, setSelectedId, fabricCanvas }) {
     const canvasObjects = useSelector(state => state.canvas.present);
@@ -58,23 +99,40 @@ export default function LayersPanel({ selectedId, setSelectedId, fabricCanvas })
         setLayers(reduxLayers);
     }, [canvasObjects]);
 
-    const onDragEnd = (result) => {
-        const { source, destination } = result;
-        if (!destination || source.index === destination.index) return;
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
 
-        const newDisplayOrder = Array.from(layers);
-        const [removed] = newDisplayOrder.splice(source.index, 1);
-        newDisplayOrder.splice(destination.index, 0, removed);
+    const handleDragEnd = (event) => {
+        const { active, over } = event;
 
-        setLayers(newDisplayOrder);
-        const newReduxOrder = [...newDisplayOrder].reverse();
-        reorderLayers(newReduxOrder);
+        if (over && active.id !== over.id) {
+            const oldIndex = layers.findIndex((l) => String(l.id) === active.id);
+            const newIndex = layers.findIndex((l) => String(l.id) === over.id);
+
+            const newDisplayOrder = arrayMove(layers, oldIndex, newIndex);
+            setLayers(newDisplayOrder);
+
+            const newReduxOrder = [...newDisplayOrder].reverse();
+            reorderLayers(newReduxOrder);
+
+            if (fabricCanvas) {
+                fabricCanvas.renderAll();
+            }
+        }
     };
 
     const handleSelectLayer = (id) => {
         setSelectedId(id);
         if (fabricCanvas) {
-            const obj = fabricCanvas.getObjects().find(o => o.customId === id);
+            const obj = fabricCanvas.getObjects().find(o => String(o.customId) === String(id) || String(o.id) === String(id));
             if (obj) {
                 fabricCanvas.setActiveObject(obj);
                 fabricCanvas.renderAll();
@@ -89,36 +147,45 @@ export default function LayersPanel({ selectedId, setSelectedId, fabricCanvas })
 
     return (
         <div className="layers-panel-content p-2">
-            <h3 className="text-xs font-bold text-slate-500 uppercase text-center mb-4 tracking-wider">
-                Layers ({layers.length})
+            <h3 className="text-xs font-bold text-slate-500 uppercase text-center mb-4 tracking-wider flex items-center justify-center gap-2">
+                <FiGrid size={14} /> Layers ({layers.length})
             </h3>
 
-            <DragDropContext onDragEnd={onDragEnd}>
-                <div className='layer-list-wrapper'>
-                    <Droppable droppableId="layer-list-droppable">
-                        {(provided) => (
-                            <div ref={provided.innerRef} {...provided.droppableProps} className="layer-list">
-                                {layers.length === 0 && (
-                                    <div className="text-center py-10 text-slate-500 text-xs border border-dashed border-white/10 rounded-lg">
-                                        Canvas is empty
-                                    </div>
-                                )}
-                                {layers.map((obj, index) => (
-                                    <DraggableLayerItem
-                                        key={String(obj.id)}
-                                        object={obj}
-                                        index={index}
-                                        isSelected={obj.id === selectedId}
-                                        onSelect={handleSelectLayer}
-                                        onDelete={handleDeleteLayer}
-                                    />
-                                ))}
-                                {provided.placeholder}
-                            </div>
-                        )}
-                    </Droppable>
+            <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+            >
+                <div
+                    className='layer-list-wrapper relative w-full h-full'
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchMove={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                >
+                    <SortableContext
+                        items={layers.map(l => String(l.id))}
+                        strategy={verticalListSortingStrategy}
+                    >
+                        <div className="layer-list relative pb-20 w-full overflow-hidden">
+                            {layers.length === 0 && (
+                                <div className="text-center py-10 text-slate-500 text-xs border border-dashed border-white/10 rounded-lg">
+                                    Canvas is empty
+                                </div>
+                            )}
+                            {layers.map((obj) => (
+                                <SortableLayerItem
+                                    key={String(obj.id)}
+                                    id={String(obj.id)}
+                                    object={obj}
+                                    isSelected={String(obj.id) === String(selectedId)}
+                                    onSelect={handleSelectLayer}
+                                    onDelete={handleDeleteLayer}
+                                />
+                            ))}
+                        </div>
+                    </SortableContext>
                 </div>
-            </DragDropContext>
+            </DndContext>
         </div>
     );
 }

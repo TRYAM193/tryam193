@@ -15,7 +15,7 @@ export default function Landing() {
   const { t } = useTranslation();
   const [remainingSlots, setRemainingSlots] = useState<number | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
-  
+
   const handleMouseEnter = () => {
     setIsPopoverOpen(true);
   };
@@ -26,10 +26,10 @@ export default function Landing() {
     }, 200);
   };
 
-  useReferralTracking(); 
+  useReferralTracking();
   useEffect(() => {
     const launchRef = doc(db, 'app_settings', 'launch_status');
-    
+
     // onSnapshot listens for live updates instantly!
     const unsubscribe = onSnapshot(launchRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -203,17 +203,17 @@ export default function Landing() {
                 <div className="inline-flex items-center gap-2 sm:gap-3 px-4 sm:px-5 py-2.5 rounded-full border border-orange-500/40 bg-orange-500/10 backdrop-blur-md shadow-[0_0_25px_rgba(249,115,22,0.25)] relative overflow-hidden group">
                   {/* Shimmer Effect */}
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-400/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
-                  
+
                   <Flame className="w-5 h-5 text-orange-500 animate-pulse hidden sm:block" />
-                  
+
                   <span className="text-orange-100 font-medium text-sm sm:text-base z-10">
                     Only <span className="text-white font-black text-lg mx-1">{remainingSlots} / 100</span> Founding Creator spots left!
                   </span>
 
-                 {/* ❓ THE INFO ICON (Hover + Click) */}
+                  {/* ❓ THE INFO ICON (Hover + Click) */}
                   <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
                     <PopoverTrigger asChild>
-                      <button 
+                      <button
                         onMouseEnter={handleMouseEnter}
                         onMouseLeave={handleMouseLeave}
                         onClick={() => setIsPopoverOpen(true)}
@@ -222,11 +222,11 @@ export default function Landing() {
                         <Info className="w-4 h-4" />
                       </button>
                     </PopoverTrigger>
-                    
-                    <PopoverContent 
-                      onMouseEnter={handleMouseEnter} 
+
+                    <PopoverContent
+                      onMouseEnter={handleMouseEnter}
                       onMouseLeave={handleMouseLeave}
-                      className="w-72 sm:w-80 bg-[#1a2035]/95 backdrop-blur-xl border-orange-500/30 shadow-2xl shadow-black p-5 rounded-2xl z-50" 
+                      className="w-72 sm:w-80 bg-[#1a2035]/95 backdrop-blur-xl border-orange-500/30 shadow-2xl shadow-black p-5 rounded-2xl z-50"
                       sideOffset={15}
                     >
                       <div className="space-y-3 relative z-50">
@@ -346,6 +346,24 @@ export default function Landing() {
                 </Link>
               </div>
             </div>
+          </div>
+        </section>
+        {/* SEO Brand Description — Natural, crawlable content for Google */}
+        <section className="py-16 px-4">
+          <div className="container mx-auto max-w-3xl text-center">
+            <h2 className="text-2xl font-bold text-slate-300 mb-4">
+              India's Custom Merch Platform — TRYAM
+            </h2>
+            <p className="text-slate-500 text-sm leading-relaxed">
+              TRYAM is a modern custom merch platform available at{" "}
+              <a href="https://tryam193.in" className="text-orange-400 hover:underline">
+                tryam193.in
+              </a>
+              . Powered by an AI design tool, TRYAM lets you design and personalize T-shirts, hoodies,
+              and apparel with ease — no design experience needed. From creation to delivery, everything
+              is streamlined so you can focus on bringing your ideas to life. Whether you know us as TRYAM
+              or TRYAM193, we're building the future of personalized merch in India.
+            </p>
           </div>
         </section>
       </main>

@@ -550,7 +550,7 @@ export default function LaunchPage() {
         {phase === "launched" && (
           <motion.div
             key="landing"
-            className="absolute inset-0 overflow-auto"
+            className="absolute inset-0 overflow-auto no-scrollbar"
             style={{ zIndex: 20 }}
             initial={{ opacity: 0, scale: 1.06, filter: "blur(24px)" }}
             animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}

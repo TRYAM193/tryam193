@@ -22,7 +22,17 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* 2. SHOP LINKS */}
+        {/* 2. COMPANY LINKS */}
+        <div>
+          <h3 className="text-white font-bold mb-4 uppercase tracking-wider text-xs">Company</h3>
+          <ul className="space-y-2 text-sm">
+            <li><Link to="/about" className="hover:text-orange-500 transition">About Us</Link></li>
+            <li><Link to="/contact" className="hover:text-orange-500 transition">Contact</Link></li>
+            <li><Link to="/help" className="hover:text-orange-500 transition">Help Center</Link></li>
+          </ul>
+        </div>
+
+        {/* 3. SHOP LINKS */}
         <div>
           <h3 className="text-white font-bold mb-4 uppercase tracking-wider text-xs">Shop</h3>
           <ul className="space-y-2 text-sm">

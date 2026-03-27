@@ -38,6 +38,7 @@ import AdminRoute from "./components/AdminRoute";
 import BannedPage from "./pages/BannedPage.tsx";
 import ProtectedRoute from "./components/ProtectedRoute.tsx";
 import TemplatesPage from "./pages/TemplatesPage.tsx";
+import AboutPage from "./pages/AboutPage.tsx";
 
 function RouteSyncer() {
   const location = useLocation();
@@ -72,6 +73,7 @@ createRoot(document.getElementById("root")!).render(
           <Routes>
             <Route path="/banned" element={<BannedPage />} />
             <Route path="/" element={<Landing />} />
+            <Route path="/about" element={<AboutPage />} />
             <Route path="/help" element={<HelpPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/auth" element={<AuthPage redirectAfterAuth="/dashboard" />} />

@@ -7,6 +7,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import "./index.css";
 import Landing from "./pages/Landing.tsx";
+import LaunchPage from "./pages/LaunchPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import "./types/global.d.ts";
 import { DashboardLayout } from "./components/DashboardLayout";
@@ -72,7 +73,8 @@ createRoot(document.getElementById("root")!).render(
           <RouteSyncer />
           <Routes>
             <Route path="/banned" element={<BannedPage />} />
-            <Route path="/" element={<Landing />} />
+            <Route path="/" element={<LaunchPage />} />
+            <Route path="/home" element={<Landing />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/help" element={<HelpPage />} />
             <Route path="/contact" element={<ContactPage />} />

@@ -1,24 +1,25 @@
 import { Link } from "react-router";
-import { Facebook, Instagram, Youtube, Mail, MapPin, Phone } from "lucide-react";
+import { Facebook, Instagram, Youtube, Mail, MapPin, Phone, Linkedin } from "lucide-react";
 
 export default function Footer() {
   return (
     <footer className="bg-slate-950 border-t border-slate-900 pt-16 pb-8 text-slate-400">
       <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-        
+
         {/* 1. BRAND & SOCIAL */}
         <div className="space-y-4">
           <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent inline-block">
             TRYAM
           </h2>
           <p className="text-sm leading-relaxed">
-            The easiest way to design and print custom apparel. 
+            The easiest way to design and print custom apparel.
             Premium quality, AI-powered tools, Ship all over INDIA.
           </p>
           <div className="flex gap-4 pt-2">
             <SocialIcon icon={Instagram} link={'https://www.instagram.com/tryam193/'} />
             <SocialIcon icon={Youtube} link={'https://youtube.com/@tryam193?si=3cV_P5AZHwSXIXs2'} />
             <SocialIcon icon={Facebook} link={'https://www.facebook.com/share/1HShoCdBuo/'} />
+            <SocialIcon icon={Linkedin} link={'https://www.linkedin.com/in/tryam-tryam-b837b33ba'} />
           </div>
         </div>
 
@@ -63,13 +64,13 @@ export default function Footer() {
             </li>
             <li className="flex items-start gap-3">
               <MapPin className="h-4 w-4 text-orange-500 mt-1" />
-              <span>150/4 14th Main Srinagar,<br/>Bengaluru, Karnataka 560050</span>
+              <span>150/4 14th Main Srinagar,<br />Bengaluru, Karnataka 560050</span>
             </li>
-             <li className="flex items-center gap-3">
+            <li className="flex items-center gap-3">
               <Phone className="h-4 w-4 text-orange-500" />
               <span>+91 8217037173</span>
             </li>
-             <li className="flex items-center gap-3">
+            <li className="flex items-center gap-3">
               <Phone className="h-4 w-4 text-orange-500" />
               <span>+91 6363703334</span>
             </li>

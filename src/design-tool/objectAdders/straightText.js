@@ -1,4 +1,5 @@
 import { FabricText } from 'fabric';
+import { resolveFillForFabric } from '../utils/gradientUtils';
 
 export default function StraightText(obj) {
   if (!obj || !obj.props) return;
@@ -12,6 +13,8 @@ export default function StraightText(obj) {
 
   return new FabricText(safeText, {
     ...props,
+    fill: resolveFillForFabric(props.fill),
+    stroke: resolveFillForFabric(props.stroke),
     customType: 'text',
     customId: obj.id
   });

@@ -1,5 +1,6 @@
 // src/design-tool/objectAdders/CircleText.js
 import * as fabric from 'fabric';
+import { resolveFillForFabric } from '../utils/gradientUtils';
 
 export default function CircleText(objData) {
   const props = objData.props;
@@ -11,7 +12,7 @@ export default function CircleText(objData) {
     fontSize: props.fontSize || 20,
     fontFamily: props.fontFamily || 'Arial',
     letterSpacing: props.charSpacing || 0,
-    color: props.fill || '#000000',
+    color: resolveFillForFabric(props.fill) || '#000000',
     opacity: props.opacity ?? 1,
     shadow: {
       blur: props.shadowBlur || 0,
@@ -20,7 +21,7 @@ export default function CircleText(objData) {
       color: props.shadowColor || '#000000'
     },
     strokeWidth: props.strokeWidth || 0,
-    strokeColor: props.stroke || '#000000',
+    strokeColor: resolveFillForFabric(props.stroke) || '#000000',
     x: props.left,
     y: props.top,
     angle: props.angle || 0,

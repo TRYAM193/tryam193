@@ -17,8 +17,177 @@ import { processBackgroundRemoval } from '../utils/imageUtils';
 import { calculateImageDPI } from '../utils/dpiCalculator'; // ✅ Import DPI Logic
 import { AVAILABLE_FONTS } from '@/data/font';
 import { FONTS } from '../../data/font.js'
+import { GRADIENT_PRESETS, buildGradient, parseGradientState, gradientToCSS, resolveFillForFabric } from '../utils/gradientUtils';
 
 // --- 🎨 UI COMPONENTS ---
+
+const QUICK_PALETTE = [
+  '#ffffff','#000000','#f97316','#ef4444','#a855f7',
+  '#3b82f6','#22c55e','#fbbf24','#ec4899','#06b6d4','#334155','#0f172a'
+];
+
+
+/** FillPickerButton — inline expandable, fits within sidebar without overflow */
+const FillPickerButton = ({ value, onChange, onTransparent, label = 'Fill Color' }) => {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState('solid');
+  const colorInputRef = useRef(null);
+  const fromRef = useRef(null);
+  const toRef = useRef(null);
+  const gs = parseGradientState(value);
+  const [fromColor, setFromColor] = useState(gs.from);
+  const [toColor, setToColor] = useState(gs.to);
+  const [gradAngle, setGradAngle] = useState(gs.angle);
+  const [gradType, setGradType] = useState(gs.type);
+
+  const solidColor = typeof value === 'string' ? value : (gs.from || '#ffffff');
+  const isGradient = typeof value === 'object' && value !== null;
+  const previewStyle = isGradient
+    ? { background: gradientToCSS(gs.from, gs.to, gs.angle) }
+    : { backgroundColor: solidColor };
+
+  const applyGradient = (f = fromColor, t = toColor, a = gradAngle, gt = gradType) => {
+    onChange(buildGradient(gt, a, f, t));
+  };
+
+  return (
+    <div className="flex flex-col gap-2 w-full">
+      {/* Trigger row — full width */}
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-3 bg-slate-800/50 border border-white/10 hover:border-orange-500/50 rounded-xl px-3 py-2.5 transition-all group"
+      >
+        <div className="w-6 h-6 rounded-md border-2 border-white/20 shrink-0" style={previewStyle} />
+        <span className="text-xs text-slate-300 flex-1 text-left">{label}</span>
+        <span className={`text-slate-500 text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
+      </button>
+
+      {/* Inline panel — expands within sidebar */}
+      {open && (
+        <div className="flex flex-col gap-3 bg-slate-800/30 border border-white/10 rounded-2xl p-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          {/* Tab toggle */}
+          <div className="flex p-1 bg-slate-900/80 rounded-xl border border-white/5">
+            {['solid', 'gradient'].map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${
+                  tab === t ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {t === 'solid' ? '◼ Solid' : '◑ Gradient'}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'solid' ? (
+            <div className="flex flex-col gap-2">
+              {/* Quick palette — 6 col grid fits sidebar */}
+              <div className="grid grid-cols-6 gap-2">
+                {QUICK_PALETTE.map((hex) => (
+                  <button
+                    key={hex}
+                    onClick={() => { onChange(hex); setOpen(false); }}
+                    className={`w-full aspect-square rounded-lg border-2 transition-all hover:scale-110 ${
+                      value === hex ? 'border-orange-500 scale-110' : 'border-white/10'
+                    }`}
+                    style={{ backgroundColor: hex }}
+                  />
+                ))}
+              </div>
+              {/* Custom + Transparent row */}
+              <div className="flex gap-2">
+                <div
+                  className="flex-1 flex items-center gap-2 bg-slate-900/60 border border-white/10 rounded-xl px-2 py-1.5 cursor-pointer hover:border-orange-500/50 transition-all"
+                  onClick={() => colorInputRef.current?.click()}
+                >
+                  <div className="w-4 h-4 rounded border border-white/20 shrink-0" style={{ backgroundColor: solidColor }} />
+                  <span className="text-[10px] text-slate-300 font-mono uppercase flex-1 truncate">{solidColor}</span>
+                  <input ref={colorInputRef} type="color" className="sr-only" value={solidColor}
+                    onChange={(e) => onChange(e.target.value)} />
+                </div>
+                {onTransparent && (
+                  <button
+                    onClick={() => { onTransparent(); setOpen(false); }}
+                    className="px-2 py-1.5 bg-slate-900/60 border border-white/10 rounded-xl text-[10px] text-slate-400 hover:text-white hover:border-white/30 transition-all shrink-0"
+                  >None</button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {/* Presets — 4 col grid */}
+              <div className="grid grid-cols-4 gap-2">
+                {GRADIENT_PRESETS.map((p) => (
+                  <button
+                    key={p.name}
+                    onClick={() => {
+                      setFromColor(p.from); setToColor(p.to);
+                      setGradAngle(p.angle); setGradType('linear');
+                      applyGradient(p.from, p.to, p.angle, 'linear');
+                    }}
+                    className="flex flex-col items-center gap-1 group"
+                  >
+                    <div
+                      className="w-full aspect-square rounded-xl border-2 border-white/10 group-hover:border-orange-400 transition-all"
+                      style={{ background: gradientToCSS(p.from, p.to, p.angle) }}
+                    />
+                    <span className="text-[9px] text-slate-500 group-hover:text-orange-400 truncate w-full text-center">{p.name}</span>
+                  </button>
+                ))}
+              </div>
+              {/* From / To */}
+              <div className="grid grid-cols-2 gap-2">
+                {[{ label: 'From', color: fromColor, ref: fromRef }, { label: 'To', color: toColor, ref: toRef }].map(({ label, color, ref }) => (
+                  <div
+                    key={label}
+                    className="flex items-center gap-2 bg-slate-900/60 border border-white/10 rounded-xl px-2 py-2 cursor-pointer hover:border-orange-500/40 transition-all"
+                    onClick={() => ref.current?.click()}
+                  >
+                    <div className="w-4 h-4 rounded border border-white/20 shrink-0" style={{ backgroundColor: color }} />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[9px] text-slate-500 uppercase">{label}</span>
+                      <span className="text-[10px] text-slate-300 font-mono truncate">{color}</span>
+                    </div>
+                    <input ref={ref} type="color" className="sr-only" value={color}
+                      onChange={(e) => {
+                        if (label === 'From') { setFromColor(e.target.value); applyGradient(e.target.value, toColor); }
+                        else { setToColor(e.target.value); applyGradient(fromColor, e.target.value); }
+                      }} />
+                  </div>
+                ))}
+              </div>
+              {/* Preview bar */}
+              <div className="h-6 rounded-xl border border-white/10" style={{ background: gradientToCSS(fromColor, toColor, gradAngle) }} />
+              {/* Linear/Radial */}
+              <div className="flex gap-2">
+                {['linear', 'radial'].map((t) => (
+                  <button key={t}
+                    onClick={() => { setGradType(t); applyGradient(fromColor, toColor, gradAngle, t); }}
+                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${
+                      gradType === t ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-slate-800 border-white/10 text-slate-500 hover:text-white'
+                    }`}
+                  >{t === 'linear' ? '↗ Linear' : '◎ Radial'}</button>
+                ))}
+              </div>
+              {/* Angle slider */}
+              {gradType === 'linear' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 uppercase w-10 shrink-0">Angle</span>
+                  <input type="range" min={0} max={360} step={5} value={gradAngle}
+                    className="flex-1 accent-orange-500 h-1.5"
+                    onChange={(e) => { const a = Number(e.target.value); setGradAngle(a); applyGradient(fromColor, toColor, a, gradType); }} />
+                  <span className="text-[10px] text-slate-300 w-8 text-right font-mono shrink-0">{gradAngle}°</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 const ScrubbableInput = ({ label, value, min, max, step = 1, onChange, onCommit, icon: Icon, icon2: Icon2 }) => {
   const startX = useRef(0);
@@ -152,6 +321,10 @@ function liveUpdateFabric(fabricCanvas, id, updates, currentLiveProps, object) {
     finalUpdates.shadow = createFabricShadow(mergedProps.shadowColor, mergedProps.shadowBlur, mergedProps.shadowOffsetX, mergedProps.shadowOffsetY);
     shadowKeys.forEach(key => delete finalUpdates[key]);
   }
+
+  // Resolve fills and strokes (Redux plain data -> Fabric instances)
+  if (finalUpdates.fill) finalUpdates.fill = resolveFillForFabric(finalUpdates.fill);
+  if (finalUpdates.stroke) finalUpdates.stroke = resolveFillForFabric(finalUpdates.stroke);
 
   const type = object.type;
   const shapeTypes = ['star', 'pentagon', 'hexagon', 'triangle', 'arrow', 'diamond', 'trapezoid', 'lightning'];
@@ -486,18 +659,21 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
             />
           </div>
 
-          {/* Style Pills + Text Color */}
+          {/* Style Pills: Bold / Italic / Underline */}
           <div className="flex bg-slate-900/80 p-1 rounded-lg border border-white/5">
             <button disabled={!canBold} onClick={() => toggleTextStyle('bold')} className={`flex-1 py-1.5 rounded flex justify-center transition-colors ${liveProps.fontWeight === 'bold' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-white disabled:opacity-30'}`}><FiBold /></button>
             <button disabled={!canItalic} onClick={() => toggleTextStyle('italic')} className={`flex-1 py-1.5 rounded flex justify-center transition-colors ${liveProps.fontStyle === 'italic' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-white disabled:opacity-30'}`}><FiItalic /></button>
             <button onClick={() => toggleTextStyle('underline')} className={`flex-1 py-1.5 rounded flex justify-center transition-colors ${liveProps.underline ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-white'}`}><FiUnderline /></button>
-            <div className="w-[1px] bg-white/10 mx-1"></div>
-            <div className="flex items-center justify-center px-2">
-              <input type="color" className="w-5 h-5 rounded cursor-pointer bg-transparent border-none p-0" value={liveProps.fill || '#000000'} onChange={(e) => handleColorChange('fill', e.target.value)} />
-              <button onClick={() => handleUpdateAndHistory('fill', 'transparent')} className="ml-2 text-xs text-slate-400 hover:text-white">Transparent</button>
-            </div>
-
           </div>
+
+          {/* Text Fill Color — full-width inline picker */}
+          <FillPickerButton
+            label="Text Color"
+            value={liveProps.fill}
+            onChange={(val) => handleColorChange('fill', val)}
+            onTransparent={() => handleUpdateAndHistory('fill', 'transparent')}
+          />
+
           <div className="flex bg-slate-900/80 p-1 rounded-lg border border-white/5">
             {/* ✅ NEW ALIGNMENT BUTTONS */}
             <button onClick={() => handleUpdateAndHistory('textAlign', 'left')} className={`flex-1 py-1.5 rounded flex justify-center transition-colors ${liveProps.textAlign === 'left' || !liveProps.textAlign ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-white'}`} title="Align Left">
@@ -595,31 +771,42 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
       {/* ================= SHAPE PROPERTIES ================= */}
       {(isShapeObject || isSvg) && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <div className="flex gap-4 items-center">
-            {type !== 'line' && (
-              <div className="flex-1 space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase block">Fill</label>
-                <div className="bg-slate-800/50 p-2 rounded-lg border border-white/10 flex items-center gap-2">
-                  <input type="color" className="w-full h-6 rounded cursor-pointer bg-transparent" value={liveProps.fill || '#000000'} onChange={(e) => handleColorChange('fill', e.target.value)} />
-                  <button onClick={() => handleUpdateAndHistory('fill', null)} className="ml-2 text-xs text-slate-400 hover:text-white">Transparent</button>
-                </div>
-              </div>
-            )}
-            <div className="flex-1 space-y-1">
-              <label className="text-[10px] font-bold text-slate-500 uppercase block">Border</label>
-              <div className="bg-slate-800/50 p-2 rounded-lg border border-white/10 flex items-center gap-2">
-                <input type="color" className="w-6 h-6 rounded cursor-pointer bg-transparent" value={liveProps.stroke || '#000000'} onChange={(e) => handleColorChange('stroke', e.target.value)} />
+
+          {/* Fill Color — full width with gradient support */}
+          {type !== 'line' && (
+            <FillPickerButton
+              label="Fill Color"
+              value={liveProps.fill}
+              onChange={(val) => handleColorChange('fill', val)}
+              onTransparent={() => handleUpdateAndHistory('fill', null)}
+            />
+          )}
+
+          {/* Border Color + Width — stacked below fill */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between bg-slate-800/50 border border-white/10 rounded-xl px-3 py-2.5">
+              <span className="text-xs text-slate-300">Border Color</span>
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-6 h-6 rounded-md border-2 border-white/20 cursor-pointer hover:border-orange-400 transition-all shrink-0"
+                  style={{ backgroundColor: liveProps.stroke || '#000000' }}
+                  onClick={(e) => e.currentTarget.nextSibling?.click()}
+                />
+                <input
+                  type="color"
+                  className="sr-only"
+                  value={liveProps.stroke || '#000000'}
+                  onChange={(e) => handleColorChange('stroke', e.target.value)}
+                />
               </div>
             </div>
+            <ScrubbableInput
+              label="Border Width" value={liveProps.strokeWidth} min={0} max={type === 'line' ? 50 : 20}
+              onChange={(v) => handleLiveUpdate('strokeWidth', v)}
+              onCommit={(v) => handleUpdateAndHistory('strokeWidth', v)}
+            />
           </div>
 
-          <ScrubbableInput
-            label="Border Width" value={liveProps.strokeWidth} min={0} max={type === 'line' ? 50 : 20}
-            onChange={(v) => handleLiveUpdate('strokeWidth', v)}
-            onCommit={(v) => {
-              handleUpdateAndHistory('strokeWidth', v);
-            }}
-          />
 
           {supportsBorderRadius && (
             <ScrubbableInput

@@ -4,6 +4,7 @@ import {
   getStarPoints, getPolygonPoints, getTrianglePoints, getRoundedPathFromPoints,
   getArrowPoints, getDiamondPoints, getTrapezoidPoints, getLightningPoints, getHeartPath, getBubblePath
 } from '../utils/shapeUtils';
+import { resolveFillForFabric } from '../utils/gradientUtils';
 
 export default function ShapeAdder(obj) {
   if (!obj) return null;
@@ -11,6 +12,8 @@ export default function ShapeAdder(obj) {
 
   const options = {
     ...props,
+    fill: resolveFillForFabric(props.fill),
+    stroke: resolveFillForFabric(props.stroke),
     customId: id,
     originX: 'center',
     originY: 'center',

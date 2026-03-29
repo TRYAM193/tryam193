@@ -1,5 +1,6 @@
 // src/design-tool/mobile/PropertyControlBox.jsx
 import React, { useState, useEffect, useRef } from 'react';
+import { GRADIENT_PRESETS, buildGradient, parseGradientState, gradientToCSS, resolveFillForFabric } from '@/design-tool/utils/gradientUtils';
 import {
     Check, Plus, Bold, Italic, Underline,
     Ban, Circle, Smile, Frown, Flag,
@@ -9,7 +10,6 @@ import {
     AlignLeft, AlignCenter, AlignRight
 } from 'lucide-react';
 import { AVAILABLE_FONTS } from '@/data/font';
-import { COLOR_MAP } from '@/lib/colorMaps';
 import { Path } from 'fabric';
 import CircleText from '@/design-tool/objectAdders/CircleText';
 import { processBackgroundRemoval } from '@/design-tool/utils/imageUtils';
@@ -40,6 +40,10 @@ function liveUpdateFabric(fabricCanvas, id, updates, currentLiveProps, object) {
         );
         shadowKeys.forEach(key => delete finalUpdates[key]);
     }
+
+    // Resolve fills and strokes (Redux plain data -> Fabric instances)
+    if (finalUpdates.fill) finalUpdates.fill = resolveFillForFabric(finalUpdates.fill);
+    if (finalUpdates.stroke) finalUpdates.stroke = resolveFillForFabric(finalUpdates.stroke);
 
     const type = object.type;
     const shapeTypes = ['star', 'pentagon', 'hexagon', 'triangle', 'arrow', 'diamond', 'trapezoid', 'lightning'];
@@ -328,21 +332,214 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
 
     // --- RENDERERS ---
 
+    // Curated frequently-used design colors
+    const PALETTE = [
+        // Neutrals
+        '#ffffff', '#f1f5f9', '#94a3b8', '#64748b', '#334155', '#0f172a', '#000000',
+        // Warm
+        '#fef3c7', '#fde68a', '#fbbf24', '#f59e0b', '#d97706', '#b45309', '#92400e',
+        // Orange / Red
+        '#fed7aa', '#fb923c', '#f97316', '#ef4444', '#dc2626', '#b91c1c', '#991b1b',
+        // Pink / Purple
+        '#fbcfe8', '#f472b6', '#ec4899', '#a855f7', '#9333ea', '#7c3aed', '#4f46e5',
+        // Blue / Cyan
+        '#bfdbfe', '#60a5fa', '#3b82f6', '#06b6d4', '#0ea5e9', '#0284c7', '#1d4ed8',
+        // Green
+        '#bbf7d0', '#4ade80', '#22c55e', '#16a34a', '#15803d', '#166534', '#14532d',
+    ];
+
+
     const renderColorPicker = (targetProp) => {
         const currentFill = getValue(targetProp);
+        const inputRef = React.useRef(null);
+        const safeColor = (typeof currentFill === 'string' && currentFill.startsWith('#')) ? currentFill : '#ffffff';
         return (
-            <div className="flex gap-3 pb-2 overflow-y-auto no-scrollbar mask-linear-fade">
-                {Object.entries(COLOR_MAP).map(([name, hex]) => (
-                    <button
-                        key={name}
-                        onClick={() => handleUpdate(targetProp, hex)}
-                        className={`w-10 h-10 rounded-full shrink-0 border-2 transition-transform ${currentFill === hex ? 'border-orange-500 scale-100 shadow-lg shadow-orange-500/20' : 'border-white/10'}`}
-                        style={{ backgroundColor: hex }}
-                    />
-                ))}
+            <div className="flex flex-col gap-3">
+                <div className="flex gap-2 pb-1 overflow-x-auto no-scrollbar">
+                    {PALETTE.map((hex) => (
+                        <button
+                            key={hex}
+                            onClick={() => handleUpdate(targetProp, hex)}
+                            className={`w-8 h-8 rounded-full shrink-0 border-2 transition-all active:scale-90 ${
+                                currentFill === hex
+                                    ? 'border-orange-500 scale-110 shadow-lg shadow-orange-500/30'
+                                    : 'border-white/10 hover:border-white/30'
+                            }`}
+                            style={{ backgroundColor: hex }}
+                        />
+                    ))}
+                </div>
+                <div
+                    className="flex items-center gap-3 bg-slate-800/60 border border-white/10 rounded-xl px-3 py-2 cursor-pointer hover:border-orange-500/50 transition-all"
+                    onClick={() => inputRef.current?.click()}
+                >
+                    <div className="w-7 h-7 rounded-lg border-2 border-white/20 shrink-0" style={{ backgroundColor: safeColor }} />
+                    <span className="text-sm text-slate-300 font-mono flex-1 uppercase tracking-widest">{safeColor}</span>
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider">Custom</span>
+                    <input ref={inputRef} type="color" className="sr-only" value={safeColor} onChange={(e) => handleUpdate(targetProp, e.target.value)} />
+                </div>
             </div>
         );
     };
+
+    // ---- FILL picker with Solid | Gradient tabs (object fill only) ----
+    const GradientFillPicker = ({ targetProp }) => {
+        const currentFill = getValue(targetProp);
+        const gradState = parseGradientState(currentFill);
+        const [fillMode, setFillMode] = useState(gradState.mode);
+        const [gradType, setGradType] = useState(gradState.type);
+        const [gradAngle, setGradAngle] = useState(gradState.angle);
+        const [fromColor, setFromColor] = useState(gradState.from);
+        const [toColor, setToColor] = useState(gradState.to);
+        const fromRef = useRef(null);
+        const toRef = useRef(null);
+        const solidInputRef = useRef(null);
+        const solidColor = typeof currentFill === 'string' ? currentFill : (gradState.from || '#ffffff');
+
+        const applyGradient = (f = fromColor, t = toColor, a = gradAngle, gt = gradType) => {
+            const grad = buildGradient(gt, a, f, t);
+            handleUpdate(targetProp, grad);
+        };
+
+        return (
+            <div className="flex flex-col gap-4">
+                {/* Tab toggle */}
+                <div className="flex p-1 bg-slate-900/80 rounded-xl border border-white/5">
+                    {['solid', 'gradient'].map((mode) => (
+                        <button
+                            key={mode}
+                            onClick={() => setFillMode(mode)}
+                            className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                fillMode === mode
+                                    ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
+                                    : 'text-slate-400 hover:text-white'
+                            }`}
+                        >
+                            {mode === 'solid' ? '◼ Solid' : '◑ Gradient'}
+                        </button>
+                    ))}
+                </div>
+
+                {fillMode === 'solid' ? (
+                    <div className="flex flex-col gap-3">
+                        <div className="flex gap-2 pb-1 overflow-x-auto no-scrollbar">
+                            {PALETTE.map((hex) => (
+                                <button
+                                    key={hex}
+                                    onClick={() => handleUpdate(targetProp, hex)}
+                                    className={`w-8 h-8 rounded-full shrink-0 border-2 transition-all active:scale-90 ${
+                                        currentFill === hex
+                                            ? 'border-orange-500 scale-110 shadow-lg shadow-orange-500/30'
+                                            : 'border-white/10 hover:border-white/30'
+                                    }`}
+                                    style={{ backgroundColor: hex }}
+                                />
+                            ))}
+                        </div>
+                        <div
+                            className="flex items-center gap-3 bg-slate-800/60 border border-white/10 rounded-xl px-3 py-2 cursor-pointer hover:border-orange-500/50 transition-all"
+                            onClick={() => solidInputRef.current?.click()}
+                        >
+                            <div className="w-7 h-7 rounded-lg border-2 border-white/20 shrink-0" style={{ backgroundColor: solidColor }} />
+                            <span className="text-sm text-slate-300 font-mono flex-1 uppercase tracking-widest">{solidColor}</span>
+                            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Custom</span>
+                            <input ref={solidInputRef} type="color" className="sr-only" value={solidColor} onChange={(e) => handleUpdate(targetProp, e.target.value)} />
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-4">
+                        {/* Preset pills */}
+                        <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+                            {GRADIENT_PRESETS.map((p) => (
+                                <button
+                                    key={p.name}
+                                    onClick={() => {
+                                        setFromColor(p.from); setToColor(p.to);
+                                        setGradAngle(p.angle); setGradType('linear');
+                                        applyGradient(p.from, p.to, p.angle, 'linear');
+                                    }}
+                                    className="shrink-0 flex flex-col items-center gap-1 group"
+                                >
+                                    <div
+                                        className="w-10 h-10 rounded-full border-2 border-white/10 group-hover:border-orange-400 transition-all shadow"
+                                        style={{ background: gradientToCSS(p.from, p.to, p.angle) }}
+                                    />
+                                    <span className="text-[9px] text-slate-500 group-hover:text-orange-400 transition-colors">{p.name}</span>
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* From / To pickers */}
+                        <div className="grid grid-cols-2 gap-2">
+                            {[
+                                { label: 'From', color: fromColor, ref: fromRef },
+                                { label: 'To',   color: toColor,   ref: toRef },
+                            ].map(({ label, color, ref }) => (
+                                <div
+                                    key={label}
+                                    className="flex items-center gap-2 bg-slate-800/60 border border-white/10 rounded-xl px-3 py-2.5 cursor-pointer hover:border-orange-500/40 transition-all"
+                                    onClick={() => ref.current?.click()}
+                                >
+                                    <div className="w-6 h-6 rounded-lg border border-white/20 shrink-0" style={{ backgroundColor: color }} />
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</span>
+                                        <span className="text-xs text-slate-300 font-mono uppercase">{color}</span>
+                                    </div>
+                                    <input
+                                        ref={ref} type="color" className="sr-only" value={color}
+                                        onChange={(e) => {
+                                            if (label === 'From') { setFromColor(e.target.value); applyGradient(e.target.value, toColor); }
+                                            else { setToColor(e.target.value); applyGradient(fromColor, e.target.value); }
+                                        }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Live preview bar */}
+                        <div
+                            className="h-8 rounded-xl border border-white/10 shadow-inner"
+                            style={{ background: gradientToCSS(fromColor, toColor, gradAngle) }}
+                        />
+
+                        {/* Linear / Radial toggle */}
+                        <div className="flex gap-2">
+                            {['linear', 'radial'].map((t) => (
+                                <button
+                                    key={t}
+                                    onClick={() => { setGradType(t); applyGradient(fromColor, toColor, gradAngle, t); }}
+                                    className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all ${
+                                        gradType === t
+                                            ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
+                                            : 'bg-slate-800/60 border-white/10 text-slate-500 hover:text-white'
+                                    }`}
+                                >
+                                    {t === 'linear' ? '↗ Linear' : '◎ Radial'}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Angle slider */}
+                        {gradType === 'linear' && (
+                            <div className="flex items-center gap-3">
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 w-12 shrink-0">Angle</span>
+                                <input
+                                    type="range" min={0} max={360} step={5} value={gradAngle}
+                                    className="flex-1 accent-orange-500 h-1.5 cursor-pointer"
+                                    onChange={(e) => { const a = Number(e.target.value); setGradAngle(a); applyGradient(fromColor, toColor, a, gradType); }}
+                                />
+                                <span className="text-xs text-slate-300 w-9 text-right font-mono shrink-0">{gradAngle}°</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const renderFillPicker = (targetProp) => <GradientFillPicker targetProp={targetProp} />;
+
+
 
     const renderShadow = () => (
         <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto pr-1">
@@ -484,7 +681,7 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
 
     // ✅ SMART TITLE & CONTENT
     switch (activeProperty) {
-        case 'fill': title = "Color"; content = renderColorPicker('fill'); break;
+        case 'fill': title = "Color"; content = renderFillPicker('fill'); break;
 
         // 🔄 SMART SIZE / TRANSFORM PANEL
         case 'fontSize': // Maps to "Size" icon in Dock

@@ -12,8 +12,9 @@ import updateExisting from '../utils/updateExisting';
 import FloatingMenu from './FloatingMenu';
 import { handleCanvasAction } from '../utils/canvasActions';
 import ShapeAdder from '../objectAdders/Shapes';
-import ContextMenu from './ContextMenu';
 import { v4 as uuidv4 } from 'uuid';
+import ContextMenu from './ContextMenu';
+import { resolveFillForFabric } from '../utils/gradientUtils';
 
 fabric.Object.prototype.toObject = (function (toObject) {
   return function (propertiesToInclude) {
@@ -74,8 +75,8 @@ export default function CanvasEditor({
   const gestureState = useRef({
     isGesture: false,
     startDist: 0,
-    startScale: 1, 
-    startZoom: 1   
+    startScale: 1,
+    startZoom: 1
   });
 
   // --- 🆕 DELTA COPY, CUT, PASTE LOGIC ---
@@ -92,10 +93,10 @@ export default function CanvasEditor({
 
     // 🚀 BATCH FIX: Delete them all in one receipt
     const batchDeltas = copiedObjects.map(obj => ({
-       type: 'REMOVE', targetId: obj.id, before: obj, after: null 
+      type: 'REMOVE', targetId: obj.id, before: obj, after: null
     }));
     if (batchDeltas.length > 0) dispatch(dispatchDelta(batchDeltas));
-    
+
     fabricCanvasRef.current?.discardActiveObject();
   };
 
@@ -118,7 +119,7 @@ export default function CanvasEditor({
   const handleDuplicate = () => {
     if (selectedObjectUUIDs.length === 0) return;
     const copiedObjects = canvasObjects.filter(obj => selectedObjectUUIDs.includes(obj.id));
-    
+
     copiedObjects.forEach(obj => {
       const newId = uuidv4();
       const newObj = {
@@ -223,8 +224,8 @@ export default function CanvasEditor({
       const scaledHeight = activeObj.getScaledHeight() * vpt[3];
 
       let finalLeft, finalTop;
-      const menuWidth = 220; 
-      const screenPadding = 15; 
+      const menuWidth = 220;
+      const screenPadding = 15;
 
       if (isMobile) {
         finalLeft = screenX + (scaledWidth / 2) + 20;
@@ -263,7 +264,7 @@ export default function CanvasEditor({
         controlsAboveOverlay: true,
         preserveObjectStacking: true,
         allowTouchScrolling: false,
-        fireRightClick: true,  
+        fireRightClick: true,
         stopContextMenu: true,
       });
       fabricCanvasRef.current = canvas;
@@ -273,7 +274,7 @@ export default function CanvasEditor({
       const upperCanvas = canvas.upperCanvasEl;
 
       upperCanvas.addEventListener('contextmenu', (e) => {
-        e.preventDefault(); 
+        e.preventDefault();
         const target = canvas.findTarget(e, false);
         if (target && canvas.getActiveObject() !== target) {
           canvas.requestRenderAll();
@@ -394,37 +395,37 @@ export default function CanvasEditor({
           const batchDeltas = [];
 
           children.forEach((child) => {
-             const reduxObj = currentReduxState.find(o => o.id === child.customId);
-             if (reduxObj) {
-                 // Verify the object actually moved before making a receipt
-                 if (
-                    Math.abs(reduxObj.props.left - child.left) > 0.1 ||
-                    Math.abs(reduxObj.props.top - child.top) > 0.1 ||
-                    Math.abs(reduxObj.props.scaleX - child.scaleX) > 0.01 ||
-                    Math.abs(reduxObj.props.scaleY - child.scaleY) > 0.01 ||
-                    Math.abs(reduxObj.props.angle - child.angle) > 0.1
-                 ) {
-                     batchDeltas.push({
-                        type: 'UPDATE',
-                        targetId: child.customId,
-                        before: {
-                           left: reduxObj.props.left, top: reduxObj.props.top,
-                           scaleX: reduxObj.props.scaleX, scaleY: reduxObj.props.scaleY,
-                           angle: reduxObj.props.angle, width: reduxObj.props.width, height: reduxObj.props.height
-                        },
-                        after: {
-                           left: child.left, top: child.top,
-                           scaleX: child.scaleX, scaleY: child.scaleY,
-                           angle: child.angle, width: child.width, height: child.height
-                        }
-                     });
-                 }
-             }
+            const reduxObj = currentReduxState.find(o => o.id === child.customId);
+            if (reduxObj) {
+              // Verify the object actually moved before making a receipt
+              if (
+                Math.abs(reduxObj.props.left - child.left) > 0.1 ||
+                Math.abs(reduxObj.props.top - child.top) > 0.1 ||
+                Math.abs(reduxObj.props.scaleX - child.scaleX) > 0.01 ||
+                Math.abs(reduxObj.props.scaleY - child.scaleY) > 0.01 ||
+                Math.abs(reduxObj.props.angle - child.angle) > 0.1
+              ) {
+                batchDeltas.push({
+                  type: 'UPDATE',
+                  targetId: child.customId,
+                  before: {
+                    left: reduxObj.props.left, top: reduxObj.props.top,
+                    scaleX: reduxObj.props.scaleX, scaleY: reduxObj.props.scaleY,
+                    angle: reduxObj.props.angle, width: reduxObj.props.width, height: reduxObj.props.height
+                  },
+                  after: {
+                    left: child.left, top: child.top,
+                    scaleX: child.scaleX, scaleY: child.scaleY,
+                    angle: child.angle, width: child.width, height: child.height
+                  }
+                });
+              }
+            }
           });
 
           // Dispatch all updates instantly in a single receipt!
           if (batchDeltas.length > 0) {
-             dispatch(dispatchDelta(batchDeltas));
+            dispatch(dispatchDelta(batchDeltas));
           }
 
           // Quietly rebuild the selection box for the user
@@ -439,31 +440,31 @@ export default function CanvasEditor({
 
       // --- 🖌️ SINGLE OBJECT LOGIC ---
       if (obj.customId) {
-         const reduxObj = currentReduxState.find(o => o.id === obj.customId);
-         if (reduxObj) {
-             if (
-                Math.abs(reduxObj.props.left - obj.left) > 0.1 ||
-                Math.abs(reduxObj.props.top - obj.top) > 0.1 ||
-                Math.abs(reduxObj.props.scaleX - obj.scaleX) > 0.01 ||
-                Math.abs(reduxObj.props.scaleY - obj.scaleY) > 0.01 ||
-                Math.abs(reduxObj.props.angle - obj.angle) > 0.1
-             ) {
-                 dispatch(dispatchDelta({
-                    type: 'UPDATE',
-                    targetId: obj.customId,
-                    before: {
-                       left: reduxObj.props.left, top: reduxObj.props.top,
-                       scaleX: reduxObj.props.scaleX, scaleY: reduxObj.props.scaleY,
-                       angle: reduxObj.props.angle, width: reduxObj.props.width, height: reduxObj.props.height
-                    },
-                    after: {
-                       left: obj.left, top: obj.top,
-                       scaleX: obj.scaleX, scaleY: obj.scaleY,
-                       angle: obj.angle, width: obj.width, height: obj.height
-                    }
-                 }));
-             }
-         }
+        const reduxObj = currentReduxState.find(o => o.id === obj.customId);
+        if (reduxObj) {
+          if (
+            Math.abs(reduxObj.props.left - obj.left) > 0.1 ||
+            Math.abs(reduxObj.props.top - obj.top) > 0.1 ||
+            Math.abs(reduxObj.props.scaleX - obj.scaleX) > 0.01 ||
+            Math.abs(reduxObj.props.scaleY - obj.scaleY) > 0.01 ||
+            Math.abs(reduxObj.props.angle - obj.angle) > 0.1
+          ) {
+            dispatch(dispatchDelta({
+              type: 'UPDATE',
+              targetId: obj.customId,
+              before: {
+                left: reduxObj.props.left, top: reduxObj.props.top,
+                scaleX: reduxObj.props.scaleX, scaleY: reduxObj.props.scaleY,
+                angle: reduxObj.props.angle, width: reduxObj.props.width, height: reduxObj.props.height
+              },
+              after: {
+                left: obj.left, top: obj.top,
+                scaleX: obj.scaleX, scaleY: obj.scaleY,
+                angle: obj.angle, width: obj.width, height: obj.height
+              }
+            }));
+          }
+        }
       }
     };
 
@@ -504,7 +505,7 @@ export default function CanvasEditor({
     if (activeObject) {
       if (activeObject.type === 'activeselection') {
         selectedIds = activeObject.getObjects().map(o => o.customId);
-        fabricCanvas.discardActiveObject(); 
+        fabricCanvas.discardActiveObject();
       } else {
         selectedIds = [activeObject.customId];
       }
@@ -538,6 +539,12 @@ export default function CanvasEditor({
               }
               existing.initDimensions();
             }
+
+            const resolvedProps = { ...objData.props };
+            if (resolvedProps.fill) resolvedProps.fill = resolveFillForFabric(resolvedProps.fill);
+            if (resolvedProps.stroke) resolvedProps.stroke = resolveFillForFabric(resolvedProps.stroke);
+            existing.set(resolvedProps);
+
             existing.setCoords();
           } else {
             if (existing) fabricCanvas.remove(existing);
@@ -566,7 +573,7 @@ export default function CanvasEditor({
               if (!fabricCanvas.getObjects().some(o => o.customId === objData.id)) {
                 fabricCanvas.add(newObj);
               }
-            } catch (err) { console.error("Image load failed", err); } 
+            } catch (err) { console.error("Image load failed", err); }
             finally { pendingImagesRef.current.delete(objData.id); }
           } else if (existing) {
             updateExisting(existing, objData, isDifferent);
@@ -578,17 +585,20 @@ export default function CanvasEditor({
             try {
               const { objects, options } = await fabric.loadSVGFromString(objData.svgString);
               const svgGroup = fabric.util.groupSVGElements(objects, options);
-              svgGroup.set({ customId: objData.id, customType: 'svg', ...objData.props });
-              if (objData.props.fill && svgGroup._objects) {
-                svgGroup._objects.forEach(path => path.set('fill', objData.props.fill));
+              const resolvedFill = resolveFillForFabric(objData.props.fill);
+              const resolvedStroke = resolveFillForFabric(objData.props.stroke);
+              svgGroup.set({ ...objData.props, customId: objData.id, customType: 'svg', fill: resolvedFill, stroke: resolvedStroke });
+              if (resolvedFill && svgGroup._objects) {
+                svgGroup._objects.forEach(path => path.set('fill', resolvedFill));
               }
               fabricCanvas.add(svgGroup);
               fabricCanvas.requestRenderAll();
             } catch (err) { console.error("Failed to load SVG:", err); }
           } else {
-            existing.set({
-              ...objData.props
-            });
+            const resolvedProps = { ...objData.props };
+            if (resolvedProps.fill) resolvedProps.fill = resolveFillForFabric(resolvedProps.fill);
+            if (resolvedProps.stroke) resolvedProps.stroke = resolveFillForFabric(resolvedProps.stroke);
+            existing.set(resolvedProps);
             existing.setCoords();
           }
         }
@@ -639,12 +649,12 @@ export default function CanvasEditor({
       setCanvasObjects, setActiveTool, setSelectedId, handleCopy, handlePaste
     );
     if (action === 'delete') {
-       // Also dispatch a REMOVE delta when user deletes from the floating menu
-       selectedObjectUUIDs.forEach(id => {
-         const obj = canvasObjects.find(o => o.id === id);
-         if(obj) dispatch(dispatchDelta({ type: 'REMOVE', targetId: id, before: obj, after: null }));
-       });
-       fabricCanvasRef.current?.discardActiveObject();
+      // Also dispatch a REMOVE delta when user deletes from the floating menu
+      selectedObjectUUIDs.forEach(id => {
+        const obj = canvasObjects.find(o => o.id === id);
+        if (obj) dispatch(dispatchDelta({ type: 'REMOVE', targetId: id, before: obj, after: null }));
+      });
+      fabricCanvasRef.current?.discardActiveObject();
     }
   };
 
@@ -653,7 +663,7 @@ export default function CanvasEditor({
       ref={wrapperRef}
       id="canvas-wrapper"
       className="relative w-full h-full flex flex-col gap-2 items-center justify-center overflow-auto no-scrollbar"
-      style={{ touchAction: 'none'}} 
+      style={{ touchAction: 'none' }}
     >
       {!productId &&
         <div

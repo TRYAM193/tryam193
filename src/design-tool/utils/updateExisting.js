@@ -1,3 +1,5 @@
+import { resolveFillForFabric } from './gradientUtils';
+
 export default function updateExisting(existing, objData, isDifferent) {
     let updatesNeeded = {};
     for (const key in objData.props) {
@@ -33,7 +35,10 @@ export default function updateExisting(existing, objData, isDifferent) {
             existing.setSrc(objData.props.src);
         }
 
-        existing.set(updatesNeeded);
+        const resolvedUpdates = { ...updatesNeeded };
+        if (resolvedUpdates.fill) resolvedUpdates.fill = resolveFillForFabric(resolvedUpdates.fill);
+        if (resolvedUpdates.stroke) resolvedUpdates.stroke = resolveFillForFabric(resolvedUpdates.stroke);
+        existing.set(resolvedUpdates);
         existing.setCoords();
     }
 }

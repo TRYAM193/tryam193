@@ -59,7 +59,7 @@ async function generateInvoicePDF(orderData, itemsList) {
       address: "Default Address",
       gstin: "",
       phone: "+91 82170 37173",
-      email: "tryam193@gmail.com",
+      email: "support@tryam193.in",
     };
 
     const templateHtml = fs.readFileSync(path.join(__dirname, 'templates', 'invoice.html'), 'utf8');
@@ -249,12 +249,12 @@ async function sendInvoiceEmail(email, pdfUrl, isConsolidated, orderId, isIndia,
   </p>
 
   <div style="margin: 30px 0;">
-    <a href="https://tryam193.com/orders/${orderId}"
+    <a href="https://tryam193.in/orders/${orderId}"
        style="background-color: #1a1a1a; color: #ffffff; padding: 12px 22px; text-decoration: none; border-radius: 6px; font-size: 14px; display: inline-block; margin-right: 10px;">
       View Your Order
     </a>
 
-    <a href="https://tryam193.com/orders/${orderId}"
+    <a href="https://tryam193.in/orders/${orderId}"
        style="background-color: #ea580c; color: #ffffff; padding: 12px 22px; text-decoration: none; border-radius: 6px; font-size: 14px; display: inline-block;">
       Leave a Review
     </a>
@@ -317,7 +317,7 @@ async function sendInvoiceEmail(email, pdfUrl, isConsolidated, orderId, isIndia,
   </p>
 
   <div style="margin: 28px 0;">
-    <a href="https://tryam193.com/orders/${orderId}"
+    <a href="https://tryam193.in/orders/${orderId}"
        style="background-color: #ea580c; color: #ffffff; padding: 12px 22px; text-decoration: none; border-radius: 6px; font-size: 14px; display: inline-block;">
       Track Your Order
     </a>
@@ -378,7 +378,7 @@ async function sendInvoiceEmail(email, pdfUrl, isConsolidated, orderId, isIndia,
   </p>
 
   <div style="margin: 30px 0;">
-    <a href="https://tryam193.com/orders/${orderId}"
+    <a href="https://tryam193.in/orders/${orderId}"
        style="background-color: #1a1a1a; color: #ffffff; padding: 12px 22px; text-decoration: none; border-radius: 6px; font-size: 14px; display: inline-block;">
       View Your Order
     </a>
@@ -462,7 +462,7 @@ async function sendCODConfirmation(orderData) {
   </p>
 
   <div style="margin: 28px 0;">
-    <a href="http://localhost:5173/orders/${orderId}"
+    <a href="https://tryam193.in/orders/${orderId}"
        style="background-color: #ea580c; color: #ffffff; padding: 12px 22px; text-decoration: none; border-radius: 6px; font-size: 14px; display: inline-block;">
       View Order Details
     </a>
@@ -683,9 +683,6 @@ async function generateTempMockups(shopId, token, blueprintId, providerId, varia
   }
 }
 
-// ------------------------------------------------------------------
-// 🛠️ UPDATED GENERATOR: Dual-Pass Support for Polos & Standard Routing
-// ------------------------------------------------------------------
 // ------------------------------------------------------------------
 // 🛠️ UPDATED GENERATOR: Smart Mockup Filtering by Position/Pass
 // ------------------------------------------------------------------
@@ -1811,7 +1808,7 @@ exports.processNewOrder = functions
         from: 'System Alert <support@tryam193.in>',
         to: ['tryam193@gmail.com', 'shreyaskumarswamy2007@gmail.com', 'cchiranjeevi.r789@gmail.com'],
         subject: `🚨 Bot Failed: Order #${orderId}`,
-        html: `<p>The fulfillment bot crashed for order <b>${orderId}</b>.</p><p>Error: ${error.message}</p><p><a href="https://yourwebsite.com/admin/orders">Click here to open the Command Center and Retry.</a></p>`
+        html: `<p>The fulfillment bot crashed for order <b>${orderId}</b>.</p><p>Error: ${error.message}</p><p><a href="https://tryam193.in/admin/orders">Click here to open the Command Center and Retry.</a></p>`
       });
     }
   });
@@ -1875,10 +1872,10 @@ exports.createStripeIntent = functions
   });
 
 exports.generateFabricJson = functions
-  .runWith({ 
-    timeoutSeconds: 300, 
-    memory: '1GB', 
-    secrets: ["FUNCTIONS_CONFIG_EXPORT", geminiSecret] 
+  .runWith({
+    timeoutSeconds: 300,
+    memory: '1GB',
+    secrets: ["FUNCTIONS_CONFIG_EXPORT", geminiSecret]
   })
   .https.onCall(async (data, context) => {
     const { prompt, style, canvasWidth, canvasHeight, productInfo, referenceImages } = data;
@@ -2455,7 +2452,7 @@ exports.onTicketReply = functions.firestore
             <p style="margin:0; font-style:italic;">"${lastMessage.text}"</p>
         </div>
 
-        <a href="https://localhost:5173/orders/${newData.orderId}" style="background-color: #1a1a1a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Reply in App</a>
+        <a href="https://tryam193.in/orders/${newData.orderId}" style="background-color: #1a1a1a; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Reply in App</a>
       </div>
     `;
 

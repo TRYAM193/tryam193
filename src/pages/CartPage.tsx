@@ -465,18 +465,6 @@ export default function CartPage() {
                         )}
                       </div>
 
-                        {items.length > 0 && (
-                          <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 my-4 flex items-start gap-3">
-                            <AlertCircle className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
-                            <div>
-                              <p className="text-[11px] font-bold text-orange-400 uppercase tracking-wider">Online Payments on Hold</p>
-                              <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
-                                We are currently undergoing a website review. Online payments are coming back soon!
-                                <span className="block mt-1 font-medium text-white italic">Use COD for orders below ₹800.</span>
-                              </p>
-                            </div>
-                          </div>
-                        )}
 
                         <Button
                           onClick={() => navigate(`/checkout?mode=cart&reward=${applyReward}`)}
@@ -487,7 +475,7 @@ export default function CartPage() {
                         </Button>
 
                       <div className="flex items-center justify-center gap-2 text-xs text-slate-500 mt-4 bg-slate-900/50 py-2 rounded-lg border border-white/5">
-                        <ShieldCheck className="h-3 w-3 text-orange-500" /> Online Payments Returning Soon
+                        <ShieldCheck className="h-3 w-3 text-green-500" /> Secure Online Payments
                       </div>
                     </CardContent>
                   </Card>

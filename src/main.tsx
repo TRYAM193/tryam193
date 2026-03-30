@@ -101,11 +101,18 @@ const router = createBrowserRouter(
 function RouteSyncer() {
   const location = useLocation();
   useEffect(() => {
+    // 📊 Google Analytics Page View Tracking
+    if (window.gtag) {
+      window.gtag('config', 'G-VR1FW6LD6Y', {
+        page_path: location.pathname + location.search,
+      });
+    }
+
     window.parent.postMessage(
       { type: "iframe-route-change", path: location.pathname },
       "*",
     );
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {

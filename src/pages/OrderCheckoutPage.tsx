@@ -540,7 +540,7 @@ export default function OrderCheckoutPage() {
                     <div className="flex gap-2">
                       <Input
                         name="phone"
-                        value={shippingInfo.phone}
+                        value={shippingInfo.phone || ''}
                         onChange={(e) => {
                           handleInputChange(e);
                           if (isPhoneVerified) setIsPhoneVerified(false);
@@ -843,13 +843,13 @@ export default function OrderCheckoutPage() {
                 <div className="hidden lg:block">
                   <Button
                     onClick={handlePlaceOrder}
-                    disabled={isProcessing || items.length === 0 || (paymentMethod === 'cod' && !isCODAvailable) || paymentMethod === 'online'}
+                    disabled={isProcessing || items.length === 0 || (paymentMethod === 'cod' && !isCODAvailable)}
                     className="w-full mt-6 h-14 sm:h-12 text-base sm:text-lg font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.02]"
                   >
                     {isProcessing ? <><Loader2 className="animate-spin mr-2 h-5 w-5" /> Processing...</> :
                       (paymentMethod === 'cod' ?
                         (!isCODAvailable ? 'COD Limit Exceeded' : 'Place Order') :
-                        'Online Payment Unavailable'
+                        'Place Order'
                       )
                     }
                   </Button>
@@ -898,10 +898,10 @@ export default function OrderCheckoutPage() {
             </div>
             <Button
               onClick={handlePlaceOrder}
-              disabled={isProcessing || items.length === 0 || (paymentMethod === 'cod' && !isCODAvailable) || paymentMethod === 'online'}
+              disabled={isProcessing || items.length === 0 || (paymentMethod === 'cod' && !isCODAvailable)}
               className="h-12 px-6 text-base font-bold rounded-2xl bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-900/40 transition-all duration-200 hover:scale-[1.02]"
             >
-              {isProcessing ? <Loader2 className="animate-spin h-5 w-5" /> : (paymentMethod === 'cod' ? (isCODAvailable ? "Place Order" : "Limit Exceeded") : "Unavailable")}
+              {isProcessing ? <Loader2 className="animate-spin h-5 w-5" /> : (paymentMethod === 'cod' ? (isCODAvailable ? "Place Order" : "Limit Exceeded") : "Place Order")}
             </Button>
           </div>
         </div>

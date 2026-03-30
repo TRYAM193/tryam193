@@ -4,7 +4,7 @@ import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import AuthPage from "@/pages/Auth.tsx";
 import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Route, Routes, useLocation } from "react-router";
+import { createBrowserRouter, RouterProvider, createRoutesFromElements, Route, Routes, useLocation, Outlet } from "react-router";
 import "./index.css";
 import Landing from "./pages/Landing.tsx";
 import LaunchPage from "./pages/LaunchPage.tsx";
@@ -41,6 +41,63 @@ import ProtectedRoute from "./components/ProtectedRoute.tsx";
 import TemplatesPage from "./pages/TemplatesPage.tsx";
 import AboutPage from "./pages/AboutPage.tsx";
 
+function RootLayout() {
+  return (
+    <>
+      <RouteSyncer />
+      <Outlet />
+    </>
+  );
+}
+
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<RootLayout />}>
+      <Route path="/banned" element={<BannedPage />} />
+      <Route path="/" element={<Landing />} />
+      <Route path="/about" element={<AboutPage />} />
+      <Route path="/help" element={<HelpPage />} />
+      <Route path="/contact" element={<ContactPage />} />
+      <Route path="/auth" element={<AuthPage redirectAfterAuth="/dashboard" />} />
+      <Route path="/store" element={<Storefront />} />
+      <Route path="/product/:productId" element={<ProductDetails />} />
+      <Route path="/terms" element={<TermsConditions />} />
+      <Route path="/designs" element={<TemplatesPage />} />
+      <Route path="/design/*" element={<DesignEditorPage />} />
+
+      <Route element={<ProtectedRoute />}>
+        {/* Store Routes */}
+        <Route path="orders/:orderId" element={<OrderDetailsPage />} />
+
+        {/* Dashboard Routes */}
+        <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route index element={<DashboardHome />} />
+          <Route path="cart" element={<CartPage />} />
+          <Route path="designs" element={<DashboardTemplates />} />
+          <Route path="projects" element={<DashboardProjects />} />
+          <Route path="orders" element={<DashboardOrders />} />
+          <Route path="pricing" element={<DashboardPricing />} />
+          <Route path="settings" element={<DashboardSettings />} />
+          <Route path="help" element={<DashboardHelp />} />
+          <Route path="contact" element={<DashboardContact />} />
+        </Route>
+
+        <Route path="/checkout" element={<OrderCheckoutPage />} />
+
+        <Route element={<AdminRoute />}>
+          <Route path="/admin" element={<AdminProductManager />} />
+          <Route path="/admin/orders" element={<AdminOrders />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        </Route>
+      </Route>
+
+      <Route path="/render/*" element={<HeadlessRender />} />
+      <Route path="/legal/:type" element={<LegalPage />} />
+      <Route path="*" element={<NotFound />} />
+    </Route>
+  )
+);
+
 function RouteSyncer() {
   const location = useLocation();
   useEffect(() => {
@@ -69,52 +126,7 @@ createRoot(document.getElementById("root")!).render(
     <VlyToolbar />
     <AuthProvider>
       <CartProvider>
-        <BrowserRouter>
-          <RouteSyncer />
-          <Routes>
-            <Route path="/banned" element={<BannedPage />} />
-            <Route path="/" element={<Landing />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/help" element={<HelpPage />} />
-            <Route path="/contact" element={<ContactPage />} />
-            <Route path="/auth" element={<AuthPage redirectAfterAuth="/dashboard" />} />
-            <Route path="/store" element={<Storefront />} />
-            <Route path="/product/:productId" element={<ProductDetails />} /> {/* ✅ ADDED THIS */}
-            <Route path="/terms" element={<TermsConditions />} />
-            <Route path="/designs" element={<TemplatesPage />} />
-            <Route path="/design/*" element={<DesignEditorPage />} />
-
-            <Route element={<ProtectedRoute />}>
-              {/* Store Routes */}
-              <Route path="orders/:orderId" element={<OrderDetailsPage />} />
-
-              {/* Dashboard Routes */}
-              <Route path="/dashboard" element={<DashboardLayout />}>
-                <Route index element={<DashboardHome />} />
-                <Route path="cart" element={<CartPage />} />
-                <Route path="designs" element={<DashboardTemplates />} />
-                <Route path="projects" element={<DashboardProjects />} />
-                <Route path="orders" element={<DashboardOrders />} />
-                <Route path="pricing" element={<DashboardPricing />} />
-                <Route path="settings" element={<DashboardSettings />} />
-                <Route path="help" element={<DashboardHelp />} />
-                <Route path="contact" element={<DashboardContact />} />
-              </Route>
-
-              <Route path="/checkout" element={<OrderCheckoutPage />} />
-
-              <Route element={<AdminRoute />}>
-                <Route path="/admin" element={<AdminProductManager />} />
-                <Route path="/admin/orders" element={<AdminOrders />} />
-                <Route path="/admin/dashboard" element={<AdminDashboard />} />
-              </Route>
-
-            </Route>
-            <Route path="/render/*" element={<HeadlessRender />} />
-            <Route path="/legal/:type" element={<LegalPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+        <RouterProvider router={router} />
         <Toaster />
       </CartProvider>
     </AuthProvider>

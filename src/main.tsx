@@ -73,8 +73,7 @@ createRoot(document.getElementById("root")!).render(
           <RouteSyncer />
           <Routes>
             <Route path="/banned" element={<BannedPage />} />
-            <Route path="/" element={<LaunchPage />} />
-            <Route path="/home" element={<Landing />} />
+            <Route path="/" element={<Landing />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/help" element={<HelpPage />} />
             <Route path="/contact" element={<ContactPage />} />

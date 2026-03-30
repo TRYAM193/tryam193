@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM"],
+    "types": ["deno"],
+    "strict": true,
+    "noEmit": true
+  },
+  "include": ["main.ts"]
+}

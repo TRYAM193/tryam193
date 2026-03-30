@@ -14,7 +14,7 @@ import {
   Pencil,
   RotateCcw,
   LogIn,
-  ShieldCheck, Sparkles, Tag, Zap
+  ShieldCheck, Sparkles, Tag, Zap, AlertCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { calculatePriceDetails } from "@/lib/priceUtils";
@@ -465,16 +465,29 @@ export default function CartPage() {
                         )}
                       </div>
 
-                      <Button
-                        onClick={() => navigate(`/checkout?mode=cart&reward=${applyReward}`)}
-                        disabled={items.length === 0}
-                        className="w-full h-12 text-lg font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.02]"
-                      >
-                        Proceed to Checkout <ArrowRight className="ml-2 h-5 w-5" />
-                      </Button>
+                        {items.length > 0 && (
+                          <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 my-4 flex items-start gap-3">
+                            <AlertCircle className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-[11px] font-bold text-orange-400 uppercase tracking-wider">Online Payments on Hold</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                                We are currently undergoing a website review. Online payments are coming back soon!
+                                <span className="block mt-1 font-medium text-white italic">Use COD for orders below ₹800.</span>
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        <Button
+                          onClick={() => navigate(`/checkout?mode=cart&reward=${applyReward}`)}
+                          disabled={items.length === 0}
+                          className="w-full h-12 text-lg font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.02]"
+                        >
+                          Proceed to Checkout <ArrowRight className="ml-2 h-5 w-5" />
+                        </Button>
 
                       <div className="flex items-center justify-center gap-2 text-xs text-slate-500 mt-4 bg-slate-900/50 py-2 rounded-lg border border-white/5">
-                        <ShieldCheck className="h-3 w-3 text-green-500" /> Secure Checkout by Razorpay
+                        <ShieldCheck className="h-3 w-3 text-orange-500" /> Online Payments Returning Soon
                       </div>
                     </CardContent>
                   </Card>

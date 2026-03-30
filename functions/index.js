@@ -1875,7 +1875,11 @@ exports.createStripeIntent = functions
   });
 
 exports.generateFabricJson = functions
-  .runWith({ secrets: ["FUNCTIONS_CONFIG_EXPORT", geminiSecret] })
+  .runWith({ 
+    timeoutSeconds: 300, 
+    memory: '1GB', 
+    secrets: ["FUNCTIONS_CONFIG_EXPORT", geminiSecret] 
+  })
   .https.onCall(async (data, context) => {
     const { prompt, style, canvasWidth, canvasHeight, productInfo, referenceImages } = data;
     // Require genai locally to avoid global issues if not installed yet
@@ -1958,7 +1962,7 @@ Ensure the design looks good on a t-shirt.`;
       }
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         contents: finalContents,
         config: {
           systemInstruction: systemInstruction,

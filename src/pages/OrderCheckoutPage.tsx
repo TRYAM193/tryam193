@@ -106,7 +106,7 @@ export default function OrderCheckoutPage() {
   const [items, setItems] = useState<any[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('online');
+  const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('cod'); // Default to COD for hold
 
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [isPhoneVerified, setIsPhoneVerified] = useState(false);
@@ -667,18 +667,30 @@ export default function OrderCheckoutPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-4 sm:p-6 space-y-4">
-                <div onClick={() => setPaymentMethod('online')} className={`relative p-5  min-h-[120px] border rounded-xl cursor-pointer transition-all duration-200 group ${paymentMethod === 'online' ? 'border-orange-500 bg-gradient-to-br from-orange-500/10 to-transparent ring-1 ring-orange-500/50' : 'border-white/10 hover:bg-white/5 hover:border-white/20'}`}>
+                {/* 🔴 ONLINE PAYMENT HOLD BANNER */}
+                <div className="p-4 mb-2 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-white">Online Payments on Hold</p>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      We are currently undergoing a website review with Razorpay. Online payments are temporarily unavailable.
+                      <span className="block mt-1 font-medium text-orange-400">Please use COD or wait for our notification!</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className={`relative p-5 min-h-[120px] border rounded-xl transition-all duration-200 group border-white/5 bg-slate-900/40 opacity-60 cursor-not-allowed`}>
                   <div className="flex items-start gap-4">
-                    <div className={`p-3 rounded-xl transition-colors ${paymentMethod === 'online' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'bg-slate-800 text-slate-400'}`}>
+                    <div className={`p-3 rounded-xl bg-slate-800 text-slate-500`}>
                       <CreditCard className="h-6 w-6" />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
-                        <h3 className={`font-bold text-lg ${paymentMethod === 'online' ? 'text-white' : 'text-slate-300'}`}>Pay Online</h3>
-                        {paymentMethod === 'online' && <CheckCircle2 className="text-orange-500 h-5 w-5" />}
+                        <h3 className={`font-bold text-lg text-slate-500`}>Pay Online</h3>
+                        <Badge variant="outline" className="bg-slate-950/50 border-orange-500/30 text-orange-500 text-[10px] uppercase">Coming Soon</Badge>
                       </div>
-                      <p className="text-slate-400 text-sm mb-3">Instant & Secure. Support for all major methods.</p>
-                      <div className="flex flex-wrap gap-2">
+                      <p className="text-slate-500 text-sm mb-3">Temporarily unavailable during review.</p>
+                      <div className="flex flex-wrap gap-2 opacity-50 grayscale">
                         <Badge variant="outline" className="bg-slate-900/50 border-white/10 text-slate-300 text-[10px] font-medium py-1 px-2 gap-1"><Globe className="w-3 h-3 text-blue-400" /> International</Badge>
                         <Badge variant="outline" className="bg-slate-900/50 border-white/10 text-slate-300 text-[10px] font-medium py-1 px-2 gap-1"><CreditCard className="w-3 h-3 text-purple-400" /> Visa / Master</Badge>
                         <Badge variant="outline" className="bg-slate-900/50 border-white/10 text-slate-300 text-[10px] font-medium py-1 px-2 gap-1"><Smartphone className="w-3 h-3 text-green-400" /> UPI / GPay</Badge>
@@ -836,9 +848,21 @@ export default function OrderCheckoutPage() {
                 )}
 
                 <div className="hidden lg:block">
-                  <Button onClick={handlePlaceOrder} disabled={isProcessing || items.length === 0} className="w-full mt-6 h-14 sm:h-12 text-base sm:text-lg font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.02]">
-                    {isProcessing ? <><Loader2 className="animate-spin mr-2 h-5 w-5" /> Processing...</> : (paymentMethod === 'cod' ? 'Place Order' : `Pay ${currencySymbol}${totalPayAmount.toFixed(2)}`)}
+                  <Button
+                    onClick={handlePlaceOrder}
+                    disabled={isProcessing || items.length === 0 || (paymentMethod === 'cod' && !isCODAvailable) || paymentMethod === 'online'}
+                    className="w-full mt-6 h-14 sm:h-12 text-base sm:text-lg font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-900/20 transition-all hover:scale-[1.02]"
+                  >
+                    {isProcessing ? <><Loader2 className="animate-spin mr-2 h-5 w-5" /> Processing...</> :
+                      (paymentMethod === 'cod' ?
+                        (!isCODAvailable ? 'COD Limit Exceeded' : 'Place Order') :
+                        'Online Payment Unavailable'
+                      )
+                    }
                   </Button>
+                  {paymentMethod === 'cod' && !isCODAvailable && (
+                    <p className="text-[10px] text-red-400 text-center mt-2 italic">COD is only available for orders below {currencySymbol}800. Please reduce cart value or wait for online payments.</p>
+                  )}
                 </div>
 
                 {shippingInfo.city && shippingInfo.stateCode && (
@@ -881,10 +905,10 @@ export default function OrderCheckoutPage() {
             </div>
             <Button
               onClick={handlePlaceOrder}
-              disabled={isProcessing || items.length === 0}
+              disabled={isProcessing || items.length === 0 || (paymentMethod === 'cod' && !isCODAvailable) || paymentMethod === 'online'}
               className="h-12 px-6 text-base font-bold rounded-2xl bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-900/40 transition-all duration-200 hover:scale-[1.02]"
             >
-              {isProcessing ? <Loader2 className="animate-spin h-5 w-5" /> : paymentMethod === "cod" ? "Place Order" : "Pay Now"}
+              {isProcessing ? <Loader2 className="animate-spin h-5 w-5" /> : (paymentMethod === 'cod' ? (isCODAvailable ? "Place Order" : "Limit Exceeded") : "Unavailable")}
             </Button>
           </div>
         </div>

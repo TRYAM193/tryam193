@@ -18,6 +18,7 @@ export default function SaveDesignButton({
   urlDesignId, // 👈 New prop to pass URL design ID for better image management
   fabricCanvas,
   className,
+  id,
   variant = "outline", // Default to desktop style
   size = "sm"         // Default to desktop size
 }) {
@@ -106,6 +107,7 @@ export default function SaveDesignButton({
   return (
     <>
       <Button
+        id={id}
         onClick={handleSaveClick}
         variant={variant}
         size={size}

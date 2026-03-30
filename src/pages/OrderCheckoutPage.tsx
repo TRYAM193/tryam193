@@ -644,8 +644,8 @@ export default function OrderCheckoutPage() {
                         if (gstError) setGstError("");
                       }}
                       className={`bg-slate-950/50 text-white placeholder:text-slate-600 transition-colors ${!shippingInfo.gstNumber ? "border-white/10 focus:border-orange-500/50" :
-                          GST_REGEX.test(shippingInfo.gstNumber) ? "border-green-500/50 focus:border-green-500/50 bg-green-500/5" :
-                            "border-red-500/50 focus:border-red-500/50 bg-red-500/5"
+                        GST_REGEX.test(shippingInfo.gstNumber) ? "border-green-500/50 focus:border-green-500/50 bg-green-500/5" :
+                          "border-red-500/50 focus:border-red-500/50 bg-red-500/5"
                         }`}
                       maxLength={15}
                     />
@@ -941,7 +941,7 @@ export default function OrderCheckoutPage() {
               <Button onClick={() => setPaymentFailed(false)} className="w-full h-12 text-base font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg text-white rounded-xl border-0">
                 Try Again
               </Button>
-              <Button variant="ghost" onClick={() => { setPaymentFailed(false); navigate('/cart'); }} className="w-full h-12 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl">
+              <Button variant="ghost" onClick={() => { setPaymentFailed(false); navigate('/dashboard/cart'); }} className="w-full h-12 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl">
                 Back to Cart
               </Button>
             </div>

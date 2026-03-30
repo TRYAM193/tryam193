@@ -10,7 +10,8 @@ import RightSidebarTabs from '../components/RightSidebarTabs';
 import { undo, redo, setCanvasObjects, setHistory } from '../redux/canvasSlice';
 import { store } from '../redux/store';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, useLocation, useSearchParams } from 'react-router';
+import { useNavigate, useLocation, useSearchParams, useBlocker } from 'react-router';
+import UnsavedChangesModal from '../components/UnsavedChangesModal';
 import { useAuth } from '@/hooks/use-auth';
 import { useCart } from '@/context/CartContext';
 import MainToolbar from '../components/MainToolbar';
@@ -112,6 +113,7 @@ export default function EditorPanel() {
     const [selectedId, setSelectedId] = useState(null);
     const [currentDesign, setCurrentDesign] = useState(null);
     const [editingDesignId, setEditingDesignId] = useState(null);
+    const [isDirty, setIsDirty] = useState(false);
     const [showProperties, setShowProperties] = useState(false);
     const isMobile = useIsMobile();
 
@@ -229,6 +231,93 @@ export default function EditorPanel() {
             setEditingDesignId(uuidv4());
         }
     }, []);
+
+    // ─── Unsaved Changes Detection ───
+    useEffect(() => {
+        if (past.length > 0) {
+            setIsDirty(true);
+        } else {
+            setIsDirty(false);
+        }
+    }, [past.length]);
+
+    // Browser close/reload guard
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (isDirty) {
+                e.preventDefault();
+                e.returnValue = ''; // Required for Chrome
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isDirty]);
+
+    // React Router navigation guard
+    const blocker = useBlocker(
+        ({ currentLocation, nextLocation }) =>
+            isDirty && currentLocation.pathname !== nextLocation.pathname
+    );
+
+    const handleDiscardAndExit = () => {
+        setIsDirty(false);
+        blocker.proceed();
+    };
+
+    const handleSaveAndExit = async () => {
+        // Trigger the save button's logic or implement quick save here
+        // For simplicity and consistency, we can find the save button or 
+        // use the same utility functions.
+        
+        // Let's implement a quick-save that doesn't require a UI button click
+        setIsSaving(true);
+        try {
+            const snapshot = getCleanDataURL(1200, true);
+            let result;
+
+            if (!urlDesignId || !editingDesignId) {
+                // If it's a new design, we unfortunately need a name.
+                // We'll redirect to the save prompt.
+                setIsSaving(false);
+                toast.info("Please name your design before saving.");
+                // Open the save prompt by simulating a click
+                const saveBtn = document.getElementById('desktop-save-btn') || document.getElementById('mobile-save-btn');
+                if (saveBtn) saveBtn.click();
+                return;
+            }
+
+            // Existing design: Overwrite!
+            result = await overwriteDesign(
+                userId,
+                editingDesignId,
+                JSON.parse(JSON.stringify(canvasObjects)),
+                viewStates,
+                {
+                    productId: urlProductId || currentDesign?.productConfig?.productId || productData.id,
+                    color: urlColor || currentDesign?.productConfig?.variantColor,
+                    size: urlSize || currentDesign?.productConfig?.variantSize,
+                    print_areas: productData?.print_areas
+                },
+                currentView,
+                () => {},
+                snapshot,
+                currentDesign?.name || "Untitled Design"
+            );
+
+            if (result && result.success) {
+                toast.success("Design saved successfully!");
+                dispatch(setCanvasObjects(canvasObjects)); // Reset dirty state
+                setTimeout(() => blocker.proceed(), 500);
+            } else {
+                toast.error("Failed to save design");
+            }
+        } catch (err) {
+            console.error("Save & Exit failed:", err);
+            toast.error("An error occurred while saving");
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     // --- Calculate Prices & Gamified Discounts ---
     const currencyInfo = CURRENCY_MAP[urlRegion] || CURRENCY_MAP.IN;
@@ -1158,6 +1247,7 @@ export default function EditorPanel() {
                                 {fabricCanvas && (
                                     <>
                                         <SaveDesignButton
+                                            id="desktop-save-btn"
                                             canvas={store.getState().canvas}
                                             userId={userId}
                                             editingDesignId={editingDesignId}
@@ -1375,6 +1465,7 @@ export default function EditorPanel() {
                     canRedo={future.length > 0}
                     saveButton={
                         <SaveDesignButton
+                            id="mobile-save-btn"
                             canvas={store.getState().canvas}
                             userId={userId}
                             editingDesignId={editingDesignId}
@@ -1507,6 +1598,15 @@ export default function EditorPanel() {
                 productData={productData}
                 productCategory={productData.category}
                 selectedColor={canvasBg}
+            />
+
+            {/* ── Unsaved Changes Guard Modal ── */}
+            <UnsavedChangesModal
+                isOpen={blocker.state === "blocked"}
+                onClose={() => blocker.reset()}
+                onDiscard={handleDiscardAndExit}
+                onSave={handleSaveAndExit}
+                isSaving={isSaving}
             />
         </div>
     );

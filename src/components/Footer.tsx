@@ -60,7 +60,7 @@ export default function Footer() {
           <ul className="space-y-3 text-sm">
             <li className="flex items-center gap-3">
               <Mail className="h-4 w-4 text-orange-500" />
-              <a href="mailto:support@tryam.com" className="hover:text-white">support@tryam193.com</a>
+              <a href="mailto:support@tryam193.in" className="hover:text-white">support@tryam193.in</a>
             </li>
             <li className="flex items-start gap-3">
               <MapPin className="h-4 w-4 text-orange-500 mt-1" />

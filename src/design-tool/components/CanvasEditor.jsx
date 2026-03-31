@@ -22,7 +22,7 @@ fabric.Object.prototype.toObject = (function (toObject) {
       this,
       (propertiesToInclude || []).concat([
         'customId', 'textStyle', 'textEffect', 'radius', 'effectValue',
-        'selectable', 'lockMovementX', 'lockMovementY', 'print_src', 'originalWidth', 'originalHeight'
+        'selectable', 'lockMovementX', 'lockMovementY', 'proxy_src', 'print_src', 'originalWidth', 'originalHeight'
       ])
     );
   };

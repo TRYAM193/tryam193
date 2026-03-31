@@ -22,8 +22,8 @@ import { GRADIENT_PRESETS, buildGradient, parseGradientState, gradientToCSS, res
 // --- 🎨 UI COMPONENTS ---
 
 const QUICK_PALETTE = [
-  '#ffffff','#000000','#f97316','#ef4444','#a855f7',
-  '#3b82f6','#22c55e','#fbbf24','#ec4899','#06b6d4','#334155','#0f172a'
+  '#ffffff', '#000000', '#f97316', '#ef4444', '#a855f7',
+  '#3b82f6', '#22c55e', '#fbbf24', '#ec4899', '#06b6d4', '#334155', '#0f172a'
 ];
 
 
@@ -71,9 +71,8 @@ const FillPickerButton = ({ value, onChange, onTransparent, label = 'Fill Color'
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${
-                  tab === t ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-                }`}
+                className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${tab === t ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
               >
                 {t === 'solid' ? '◼ Solid' : '◑ Gradient'}
               </button>
@@ -88,9 +87,8 @@ const FillPickerButton = ({ value, onChange, onTransparent, label = 'Fill Color'
                   <button
                     key={hex}
                     onClick={() => { onChange(hex); setOpen(false); }}
-                    className={`w-full aspect-square rounded-lg border-2 transition-all hover:scale-110 ${
-                      value === hex ? 'border-orange-500 scale-110' : 'border-white/10'
-                    }`}
+                    className={`w-full aspect-square rounded-lg border-2 transition-all hover:scale-110 ${value === hex ? 'border-orange-500 scale-110' : 'border-white/10'
+                      }`}
                     style={{ backgroundColor: hex }}
                   />
                 ))}
@@ -164,9 +162,8 @@ const FillPickerButton = ({ value, onChange, onTransparent, label = 'Fill Color'
                 {['linear', 'radial'].map((t) => (
                   <button key={t}
                     onClick={() => { setGradType(t); applyGradient(fromColor, toColor, gradAngle, t); }}
-                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${
-                      gradType === t ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-slate-800 border-white/10 text-slate-500 hover:text-white'
-                    }`}
+                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${gradType === t ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-slate-800 border-white/10 text-slate-500 hover:text-white'
+                      }`}
                   >{t === 'linear' ? '↗ Linear' : '◎ Radial'}</button>
                 ))}
               </div>
@@ -428,13 +425,25 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
         imgElement.onload = () => {
           fabricObj.setElement(imgElement);
           fabricObj.setCoords();
+          fabricObj.set({
+            originalWidth: imgElement.width,
+            originalHeight: imgElement.height,
+            proxy_src: imgElement.src,
+            print_src: imgElement.src,
+          });
           fabricCanvas.requestRenderAll();
-          updateObject(id, { src: newImageUrl });
+          updateObject(id, { 
+            src: newImageUrl, 
+            proxy_src: imgElement.src, 
+            print_src: imgElement.src, 
+            originalWidth: imgElement.width, 
+            originalHeight: imgElement.height 
+          });
         }
       }
-    } catch (error) { console.error('BG Removal Error', error); alert('Failed. Try again.'); }
-    finally { 
-      setIsRemovingBg(false); 
+    } catch (error) { console.error('BG Removal Error', error); toast.error('Failed. Try again.'); }
+    finally {
+      setIsRemovingBg(false);
       if (onAiLoadingEnd) onAiLoadingEnd();
     }
   }

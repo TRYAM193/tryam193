@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import ImageAdder from '../objectAdders/Image';
 import { uploadToStorage } from '../utils/saveDesign';
+import updateObject from '../functions/update';
 
 export default function ImageHandler({
   setSelectedId,
@@ -62,13 +63,18 @@ export default function ImageHandler({
         const proxyLocalUrl = URL.createObjectURL(proxyBlob);
 
         // --- STEP C: PUT *PROXY* ON CANVAS ---
-        await ImageAdder(proxyLocalUrl, setSelectedId, setActiveTool, fabricCanvas);
+        const fabricObj = await ImageAdder(proxyLocalUrl, setSelectedId, setActiveTool, fabricCanvas);
 
-        const fabricObj = fabricCanvas.getActiveObject();
         if (fabricObj) {
           fabricObj.set({
             originalWidth: tempImg.width,   // Save massive width for DPI/Backend
             originalHeight: tempImg.height, // Save massive height for DPI/Backend
+            isUploading: true
+          });
+          
+          updateObject(fabricObj.customId, {
+            originalWidth: tempImg.width,
+            originalHeight: tempImg.height,
             isUploading: true
           });
         }
@@ -94,6 +100,12 @@ export default function ImageHandler({
             fabricObj.set({      
               proxy_src: proxyUrl,  
               print_src: highResUrl,  // Soul of the image (backend renderer)
+              isUploading: false
+            });
+            
+            updateObject(fabricObj.customId, {
+              proxy_src: proxyUrl,
+              print_src: highResUrl,
               isUploading: false
             });
           }

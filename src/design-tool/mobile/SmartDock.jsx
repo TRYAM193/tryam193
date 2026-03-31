@@ -3,7 +3,7 @@ import {
   Type, Shapes, ImagePlus, Sparkles, Layers,
   Palette, BoxSelect, Trash2, X, Move,
   Type as FontIcon, BookMarkedIcon, Bold, PenTool, Ghost, Wand2, LayoutGrid, Tag,
-  Eraser, Scan, Keyboard, SunMoon // ✅ Added Scan icon for Radius
+  Eraser, Scan, Keyboard, SunMoon, Maximize2 // ✅ Added Scan icon for Radius, Maximize2 for Auto DPI
 } from 'lucide-react';
 import { FaFont } from "react-icons/fa";
 import Image from '../objectAdders/Image';
@@ -85,6 +85,7 @@ export default function SmartDock({
         { id: 'replace', label: 'New Image', icon: <ImagePlus size={20} /> },
         { id: 'shadow', label: 'Shadow', icon: <SunMoon size={20} /> },
         ...tools.filter(t => t.id !== 'fill'),
+        { id: 'auto-dpi', label: 'Auto Scale', icon: <Maximize2 size={20} /> },
         { id: 'remove-bg', label: 'Remove-BG', icon: <Eraser size={20} /> },
       ];
     }

@@ -16,7 +16,7 @@ export default function MobileEditorLayout({
     setActiveTool, setActivePanel, activePanel, navigation, canvasObjects, handlePaste, clipboard,
     onUndo, onRedo, canUndo, canRedo, saveButton, onGeneratePreview,
     isGeneratingPreview, currentView, onSwitchView, availableViews = ['front', 'back'],
-    productProps, dpiIssues = [], currentDesignName
+    productProps, dpiIssues = [], currentDesignName, onAiLoadingStart, onAiLoadingEnd
 }) {
     const [activeProperty, setActiveProperty] = useState(null);
     const [showDpiList, setShowDpiList] = useState(false);
@@ -44,33 +44,47 @@ export default function MobileEditorLayout({
     const handleFixQuality = async (issue) => {
         if (isFixing) return;
         setIsFixing(issue.id);
+        if (onAiLoadingStart) onAiLoadingStart('Enhancing Image...', 'The Cosmic AI is upscaling and sharpening the details.');
 
         try {
             // 1. Get the Blob (Temporary)
             const tempBlobUrl = await processUpscale(issue.src);
 
             if (tempBlobUrl && fabricCanvas) {
-
                 const obj = fabricCanvas.getObjects().find(o => (o.customId || o.id) === issue.id);
                 if (obj) {
-                    // 3. Set the PERMANENT URL, not the blob
-                    obj.setSrc(tempBlobUrl, () => {
-                        obj.scaleX = obj.scaleX / 4;
-                        obj.scaleY = obj.scaleY / 4;
+                    const imgElement = new Image();
+                    imgElement.src = tempBlobUrl;
+                    imgElement.onload = () => {
+                        obj.setElement(imgElement);
+                        obj.set({
+                            scaleX: obj.scaleX / 4,
+                            scaleY: obj.scaleY / 4,
+                            originalWidth: imgElement.width,
+                            originalHeight: imgElement.height,
+                            proxy_src: tempBlobUrl,
+                            print_src: tempBlobUrl,
+                        });
                         obj.setCoords();
                         fabricCanvas.requestRenderAll();
                         fabricCanvas.fire('object:modified', { target: obj });
 
-                        // Optional: Revoke the local blob to free memory
-                        URL.revokeObjectURL(tempBlobUrl);
-                    }, { crossOrigin: 'anonymous' }); // Important for CORS
+                        updateObject(issue.id, {
+                            proxy_src: tempBlobUrl,
+                            print_src: tempBlobUrl,
+                            originalWidth: imgElement.width,
+                            originalHeight: imgElement.height,
+                            src: tempBlobUrl
+                        });
+                    };
                 }
             }
         } catch (error) {
             console.error("Fix failed:", error);
-            // Optionally toast.error("Failed to save enhanced image")
+            toast.error("Failed to save enhanced image")
         } finally {
             setIsFixing(null);
+            if (onAiLoadingEnd) onAiLoadingEnd();
         }
     };
 
@@ -191,7 +205,7 @@ export default function MobileEditorLayout({
                 </div>
             )}
             {productProps.id && activePanel === 'product' && <ProductDrawer {...productProps} onClose={() => setActivePanel(null)} />}
-            <PropertyControlBox activeProperty={activeProperty} object={selectedObject} onClose={() => setActiveProperty(null)} fabricCanvas={fabricCanvas} updateObject={updateObject} updateDpiForObject={updateDpiForObject} printDimensions={productProps.printDimensions} />
+            <PropertyControlBox activeProperty={activeProperty} object={selectedObject} onClose={() => setActiveProperty(null)} fabricCanvas={fabricCanvas} updateObject={updateObject} updateDpiForObject={updateDpiForObject} printDimensions={productProps.printDimensions} onAiLoadingEnd={onAiLoadingEnd} onAiLoadingStart={onAiLoadingStart} />
             <SmartDock mode={selectedId ? 'edit' : 'create'} selectedObject={selectedObject} onSelectTool={handleToolSelect} onSelectProperty={(prop) => setActiveProperty(prop === activeProperty ? null : prop)} onDeselect={handleDeselect} setActiveTool={setActiveTool} setSelectedId={setSelectedId} fabricCanvas={fabricCanvas} activePanel={activePanel} productId={productProps.id} />
         </div>
     );

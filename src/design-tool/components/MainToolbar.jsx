@@ -10,6 +10,7 @@ import {
 import { Loader2, Sparkles, ImagePlusIcon, Layout } from 'lucide-react'; // 👈 Import Loader
 import Image from '../objectAdders/Image'
 import addSvgToRedux from '../objectAdders/Svg';
+import updateObject from '../functions/update';
 
 export default function MainToolbar({
     activePanel, onSelectTool, setSelectedId, setActiveTool,
@@ -108,25 +109,37 @@ export default function MainToolbar({
             const tempBlobUrl = await processUpscale(issue.src);
 
             if (tempBlobUrl && fabricCanvas) {
-
                 const obj = fabricCanvas.getObjects().find(o => (o.customId || o.id) === issue.id);
                 if (obj) {
-                    // 3. Set the PERMANENT URL, not the blob
-                    obj.setSrc(tempBlobUrl, () => {
-                        obj.scaleX = obj.scaleX / 4;
-                        obj.scaleY = obj.scaleY / 4;
+                    const imgElement = new Image();
+                    imgElement.src = tempBlobUrl;
+                    imgElement.onload = () => {
+                        obj.setElement(imgElement);
+                        obj.set({
+                            scaleX: obj.scaleX / 4,
+                            scaleY: obj.scaleY / 4,
+                            originalWidth: imgElement.width,
+                            originalHeight: imgElement.height,
+                            proxy_src: tempBlobUrl,
+                            print_src: tempBlobUrl,
+                        });
                         obj.setCoords();
                         fabricCanvas.requestRenderAll();
                         fabricCanvas.fire('object:modified', { target: obj });
 
-                        // Optional: Revoke the local blob to free memory
-                        URL.revokeObjectURL(tempBlobUrl);
-                    }, { crossOrigin: 'anonymous' }); // Important for CORS
+                        updateObject(issue.id, {
+                            proxy_src: tempBlobUrl,
+                            print_src: tempBlobUrl,
+                            originalWidth: imgElement.width,
+                            originalHeight: imgElement.height,
+                            src: tempBlobUrl
+                        });
+                    };
                 }
             }
         } catch (error) {
             console.error("Fix failed:", error);
-            // Optionally toast.error("Failed to save enhanced image")
+            toast.error("Failed to save enhanced image")
         } finally {
             setIsFixing(null);
             if (onAiLoadingEnd) onAiLoadingEnd();

@@ -268,7 +268,7 @@ export default function EditorPanel() {
         // Trigger the save button's logic or implement quick save here
         // For simplicity and consistency, we can find the save button or 
         // use the same utility functions.
-        
+
         // Let's implement a quick-save that doesn't require a UI button click
         setIsSaving(true);
         try {
@@ -299,7 +299,7 @@ export default function EditorPanel() {
                     print_areas: productData?.print_areas
                 },
                 currentView,
-                () => {},
+                () => { },
                 snapshot,
                 currentDesign?.name || "Untitled Design"
             );
@@ -517,6 +517,21 @@ export default function EditorPanel() {
             }
         } catch (error) {
             console.error("Error merging design:", error);
+        }
+    };
+
+    // Callback when SAVE is globally successful
+    const handleSaveSuccess = (savedDesignId) => {
+        // Clear history so the page doesn't warn "unsaved changes" on exit
+        dispatch(setCanvasObjects(canvasObjects));
+        
+        // Update URL to reflect the new saved design so subsequent saves overwrite it
+        if (savedDesignId) {
+            setEditingDesignId(savedDesignId);
+            setSearchParams(prev => {
+                prev.set('designId', savedDesignId);
+                return prev;
+            });
         }
     };
 
@@ -1124,6 +1139,7 @@ export default function EditorPanel() {
             setIsAddingToCart(false);
         }
     };
+    console.log(fabricCanvas?.getActiveObject())
 
     const handleBuyNow = async () => {
         if (!userId) { navigation('/auth'); return; }
@@ -1258,7 +1274,7 @@ export default function EditorPanel() {
                                                 productId: urlProductId || currentDesign?.productConfig?.productId,
                                                 color: urlColor || currentDesign?.productConfig?.variantColor,
                                                 size: urlSize || currentDesign?.productConfig?.variantSize,
-                                                print_areas: productData.print_areas
+                                                print_areas: productData?.print_areas || []
                                             }}
                                             currentObjects={canvasObjects}
                                             onGetSnapshot={getCleanDataURL}
@@ -1266,6 +1282,7 @@ export default function EditorPanel() {
                                             className="h-9 px-4 rounded-full flex items-center justify-center hover:text-orange-400 text-slate-200 text-xs font-bold shadow-lg transition-all"
                                             variant="ghost"
                                             fabricCanvas={fabricCanvas}
+                                            onSaveSuccess={handleSaveSuccess}
                                         />
                                         <button
                                             onClick={handlePaste}
@@ -1457,6 +1474,8 @@ export default function EditorPanel() {
                     updateDpiForObject={updateDpiForObject}
                     handlePaste={handlePaste}
                     clipboard={clipboard}
+                    onAiLoadingStart={handleAiLoadingStart}
+                    onAiLoadingEnd={handleAiLoadingEnd}
 
                     // --- 1. Pass Action Functions ---
                     onUndo={() => dispatch(undo())}
@@ -1474,10 +1493,10 @@ export default function EditorPanel() {
                             currentView={currentView}
                             viewStates={viewStates}
                             productData={{
-                                productId: urlProductId || currentDesign?.productConfig?.productId || productData.id,
+                                productId: urlProductId || currentDesign?.productConfig?.productId || productData?.id,
                                 color: urlColor || currentDesign?.productConfig?.variantColor,
                                 size: urlSize || currentDesign?.productConfig?.variantSize,
-                                print_areas: productData?.print_areas
+                                print_areas: productData?.print_areas || []
                             }}
                             fabricCanvas={fabricCanvas}
                             currentObjects={canvasObjects}
@@ -1485,8 +1504,7 @@ export default function EditorPanel() {
                             onGetSnapshot={getCleanDataURL}
                             currentDesignName={currentDesign?.name}
                             variant="ghost"
-                        // Optional: If your component has a 'label' prop, set it to "Save"
-                        // Optional: If it has an 'iconOnly' prop for mobile, set it true
+                            onSaveSuccess={handleSaveSuccess}
                         />
                     }
                     // --- 2. Pass Preview Function ---

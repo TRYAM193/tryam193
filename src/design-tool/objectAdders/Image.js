@@ -30,4 +30,6 @@ export default async function Image(src, setSelectedId, setActiveTool, fabricCan
     addedImage = false;
     addImage(fabricImage)
   }
+
+  return fabricImage;
 }

@@ -241,6 +241,50 @@ const uploadThumbnail = async (userId, designId, base64String) => {
   }
 };
 
+// 🚀 HELPER: Ensures all local blob URLs from Tools (Remove BG / Enhance) are saved permanently
+const ensurePermanentUrls = async (viewStates, userId, designId) => {
+  for (const view of Object.keys(viewStates)) {
+    const objects = viewStates[view];
+    
+    const processObjects = async (objs) => {
+      if (!objs) return;
+      for (let obj of objs) {
+        if (obj.type === 'image' || obj.type === 'Image') {
+          const fileId = uuidv4();
+          let newPrintUrl = null;
+          let newProxyUrl = null;
+          
+          if (obj.print_src && obj.print_src.startsWith('blob:')) {
+            const loc = `users/${userId}/designs/${designId}/images/originals/${fileId}`;
+            newPrintUrl = await uploadToStorage(obj.print_src, loc);
+            obj.print_src = newPrintUrl;
+          }
+          
+          if (obj.proxy_src && obj.proxy_src.startsWith('blob:')) {
+            const loc = `users/${userId}/designs/${designId}/images/proxies/${fileId}`;
+            newProxyUrl = await uploadToStorage(obj.proxy_src, loc);
+            obj.proxy_src = newProxyUrl;
+          }
+          
+          if (obj.src && obj.src.startsWith('blob:')) {
+            if (newProxyUrl) {
+              obj.src = newProxyUrl;
+            } else if (newPrintUrl) {
+              obj.src = newPrintUrl;
+            } else {
+              const loc = `users/${userId}/designs/${designId}/images/proxies/${fileId}-fallback`;
+              obj.src = await uploadToStorage(obj.src, loc);
+            }
+          }
+        }
+        if (obj.type === 'group' && obj.objects) await processObjects(obj.objects);
+      }
+    };
+    
+    await processObjects(objects);
+  }
+};
+
 // --- SAVE NEW DESIGN ---
 // 👇 Add `isCopy = false` to the end of the parameters
 export const saveNewDesign = async (userId, currentObjects, viewStates, productData, currentView, setSaving, thumbnailDataUrl, name, isCopy = false) => {
@@ -248,11 +292,16 @@ export const saveNewDesign = async (userId, currentObjects, viewStates, productD
   try {
     const newId = uuidv4();
     let finalViewStates = { ...viewStates, [currentView]: currentObjects };
-    // 🛑 THE CLONE FIX: If "Save As Copy", physical duplicate the files to the new ID!
+
+    // 🛑 1. Ensure Permanent URLs for anything local before duplicating
+    await ensurePermanentUrls(finalViewStates, userId, newId);
+
+    // 🛑 2. THE CLONE FIX: If "Save As Copy", physical duplicate the files to the new ID!
     if (isCopy) {
       finalViewStates = await cloneCanvasImagesForCopy(userId, newId, finalViewStates);
-      currentObjects = finalViewStates[currentView]; // Update current objects for the build doc
     }
+    
+    currentObjects = finalViewStates[currentView]; // Sync changes back to current objects
 
     // 1. Upload the thumbnail to Storage first
     const thumbnailUrl = await uploadThumbnail(userId, newId, thumbnailDataUrl);
@@ -281,7 +330,14 @@ export const overwriteDesign = async (userId, designId, currentObjects, viewStat
     const thumbnailUrl = await uploadThumbnail(userId, designId, thumbnailDataUrl);
     // ✅ Pass 'name' to the builder
     const finalViewStates = { ...viewStates, [currentView]: currentObjects };
+    
+    // 🛑 1. Upload blobs to firebase permanently first
+    await ensurePermanentUrls(finalViewStates, userId, designId);
+
+    // 🛑 2. Delete missing images
     await cleanUpRemovedImages(userId, designId, finalViewStates);
+    
+    currentObjects = finalViewStates[currentView]; // Sync changes!
 
     const designDoc = buildDesignDoc(designId, currentObjects, viewStates, productData, userId, currentView, false, thumbnailUrl, name);
 

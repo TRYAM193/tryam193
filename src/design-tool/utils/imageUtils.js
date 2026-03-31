@@ -23,11 +23,17 @@ export const processBackgroundRemoval = async (imageSrc) => {
     const formData = new FormData();
     formData.append('file', blob, 'image.png');
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
     const apiResponse = await fetch(getApiUrl('/remove-bg'), {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` },
       body: formData,
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
 
     if (apiResponse.status === 429) {
       toast.error("Daily Limit Reached");
@@ -40,8 +46,13 @@ export const processBackgroundRemoval = async (imageSrc) => {
     return URL.createObjectURL(resultBlob);
 
   } catch (error) {
-    console.error("BG Removal Error:", error);
-    toast.error("Background removal failed.");
+    if (error.name === 'AbortError') {
+      console.error("BG Removal Timeout:", error);
+      toast.error("Request timed out. Please try again.");
+    } else {
+      console.error("BG Removal Error:", error);
+      toast.error("Background removal failed.");
+    }
     return null;
   }
 };
@@ -63,11 +74,17 @@ export const processUpscale = async (imageSrc) => {
     const formData = new FormData();
     formData.append('file', blob, 'image.png');
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
     const apiResponse = await fetch(getApiUrl('/upscale'), {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` },
       body: formData,
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
 
     if (apiResponse.status === 429) {
       toast.error("Daily Limit Reached");
@@ -80,8 +97,13 @@ export const processUpscale = async (imageSrc) => {
     return URL.createObjectURL(resultBlob);
 
   } catch (error) {
-    console.error("Upscale Failed:", error);
-    toast.error("Enhancement Failed");
+    if (error.name === 'AbortError') {
+      console.error("Upscale Timeout:", error);
+      toast.error("Upscale request timed out.");
+    } else {
+      console.error("Upscale Failed:", error);
+      toast.error("Enhancement Failed");
+    }
     return null;
   }
 };

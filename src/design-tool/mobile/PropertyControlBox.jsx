@@ -235,7 +235,7 @@ const LiveSlider = ({ label, value, min, max, step, object, propKey, updateObjec
 };
 
 // --- 3. MAIN COMPONENT ---
-export default function PropertyControlBox({ activeProperty, object, updateObject, onClose, fabricCanvas, updateDpiForObject, printDimensions = { w: 4500, h: 5400 } }) {
+export default function PropertyControlBox({ activeProperty, object, updateObject, onClose, fabricCanvas, updateDpiForObject, onAiLoadingStart, onAiLoadingEnd, printDimensions = { w: 4500, h: 5400 } }) {
     if (!activeProperty || !object) return null;
 
     const fileInputRef = useRef(null);
@@ -360,11 +360,10 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
                         <button
                             key={hex}
                             onClick={() => handleUpdate(targetProp, hex)}
-                            className={`w-8 h-8 rounded-full shrink-0 border-2 transition-all active:scale-90 ${
-                                currentFill === hex
-                                    ? 'border-orange-500 scale-110 shadow-lg shadow-orange-500/30'
-                                    : 'border-white/10 hover:border-white/30'
-                            }`}
+                            className={`w-8 h-8 rounded-full shrink-0 border-2 transition-all active:scale-90 ${currentFill === hex
+                                ? 'border-orange-500 scale-110 shadow-lg shadow-orange-500/30'
+                                : 'border-white/10 hover:border-white/30'
+                                }`}
                             style={{ backgroundColor: hex }}
                         />
                     ))}
@@ -409,11 +408,10 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
                         <button
                             key={mode}
                             onClick={() => setFillMode(mode)}
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                                fillMode === mode
-                                    ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
-                                    : 'text-slate-400 hover:text-white'
-                            }`}
+                            className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${fillMode === mode
+                                ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
+                                : 'text-slate-400 hover:text-white'
+                                }`}
                         >
                             {mode === 'solid' ? '◼ Solid' : '◑ Gradient'}
                         </button>
@@ -427,11 +425,10 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
                                 <button
                                     key={hex}
                                     onClick={() => handleUpdate(targetProp, hex)}
-                                    className={`w-8 h-8 rounded-full shrink-0 border-2 transition-all active:scale-90 ${
-                                        currentFill === hex
-                                            ? 'border-orange-500 scale-110 shadow-lg shadow-orange-500/30'
-                                            : 'border-white/10 hover:border-white/30'
-                                    }`}
+                                    className={`w-8 h-8 rounded-full shrink-0 border-2 transition-all active:scale-90 ${currentFill === hex
+                                        ? 'border-orange-500 scale-110 shadow-lg shadow-orange-500/30'
+                                        : 'border-white/10 hover:border-white/30'
+                                        }`}
                                     style={{ backgroundColor: hex }}
                                 />
                             ))}
@@ -473,7 +470,7 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
                         <div className="grid grid-cols-2 gap-2">
                             {[
                                 { label: 'From', color: fromColor, ref: fromRef },
-                                { label: 'To',   color: toColor,   ref: toRef },
+                                { label: 'To', color: toColor, ref: toRef },
                             ].map(({ label, color, ref }) => (
                                 <div
                                     key={label}
@@ -508,11 +505,10 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
                                 <button
                                     key={t}
                                     onClick={() => { setGradType(t); applyGradient(fromColor, toColor, gradAngle, t); }}
-                                    className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all ${
-                                        gradType === t
-                                            ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
-                                            : 'bg-slate-800/60 border-white/10 text-slate-500 hover:text-white'
-                                    }`}
+                                    className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all ${gradType === t
+                                        ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
+                                        : 'bg-slate-800/60 border-white/10 text-slate-500 hover:text-white'
+                                        }`}
                                 >
                                     {t === 'linear' ? '↗ Linear' : '◎ Radial'}
                                 </button>
@@ -559,47 +555,66 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
         if (!object.props?.src || isProcessing) return;
         setIsProcessing(true);
         try {
+            if (onAiLoadingStart) onAiLoadingStart('Removing Background...', 'The Cosmic AI is separating the subject from the void.');
             const newUrl = await processBackgroundRemoval(object.props.src);
             if (newUrl) {
-                updateObject(object.id, { src: newUrl });
                 const fabricObj = fabricCanvas.getObjects().find(o => o.customId === object.id);
                 if (fabricObj) {
-                    fabricObj.setSrc(newUrl, () => {
+                    const imgElement = new Image();
+                    imgElement.src = newUrl;
+                    imgElement.onload = () => {
+                        fabricObj.setElement(imgElement);
+                        fabricObj.set({
+                            proxy_src: newUrl,
+                            print_src: newUrl,
+                            originalWidth: imgElement.width,
+                            originalHeight: imgElement.height,
+                        });
                         fabricObj.setCoords();
                         fabricCanvas.requestRenderAll();
                         setIsProcessing(false);
                         onClose();
-                    });
+
+                        updateObject(object.id, {
+                            proxy_src: newUrl,
+                            print_src: newUrl,
+                            originalWidth: imgElement.width,
+                            originalHeight: imgElement.height,
+                            src: newUrl
+                        });
+                    };
                 } else {
                     setIsProcessing(false);
                 }
             }
         } catch (error) {
             console.error(error);
+        } finally {
             setIsProcessing(false);
+            if (onAiLoadingEnd) onAiLoadingEnd();
         }
     };
 
-    const renderImageTools = () => (
+    const renderAutoDpi = () => (
         <div className="flex flex-col gap-4 py-2">
-
-            {/* 1. AUTO DPI FIX */}
-            <div className="bg-indigo-900/20 rounded-xl p-4 border border-indigo-500/30">
-                <div className="flex items-start justify-between mb-3">
-                    <div>
-                        <p className="text-sm text-indigo-200 font-bold flex items-center gap-2"><Maximize2 size={16} /> Print Quality</p>
-                        <p className="text-[10px] text-indigo-300/60 mt-1">Optimize scale for clear printing (300 DPI).</p>
-                    </div>
+            <div className="bg-slate-800/30 rounded-xl p-4 border border-white/5">
+                <div className="mb-3">
+                    <p className="text-sm text-slate-300 font-medium">Upscale Quality</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Use AI to enhance to 300 DPI print quality.</p>
                 </div>
                 <button
                     onClick={handleAutoDpi}
-                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border border-white/5 bg-slate-800 hover:bg-slate-700 text-white"
                 >
-                    <CheckCircle2 size={14} /> Auto-Fix Scale
+                    <Maximize2 size={18} className="text-blue-400" />
+                    Auto-Fix Scale
                 </button>
             </div>
+        </div>
+    );
 
-            {/* 2. REMOVE BG */}
+    const renderRemoveBg = () => (
+        <div className="flex flex-col gap-4 py-2">
             <div className="bg-slate-800/30 rounded-xl p-4 border border-white/5">
                 <div className="mb-3">
                     <p className="text-sm text-slate-300 font-medium">Background Removal</p>
@@ -782,9 +797,14 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
             </div>
         ); break;
 
+        case 'auto-dpi':
+            title = "Print Quality";
+            content = renderAutoDpi();
+            break;
+
         case 'remove-bg':
-            title = "Image Actions";
-            content = renderImageTools(); // ✅ Now includes Auto-Scale
+            title = "Remove Background";
+            content = renderRemoveBg();
             break;
 
         case 'replace': title = "Replace Image"; content = renderReplace(); break;

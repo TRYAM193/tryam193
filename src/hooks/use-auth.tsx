@@ -10,7 +10,7 @@ import {
   signInWithPopup,
   sendPasswordResetEmail
 } from "firebase/auth";
-import { doc, collection, where, query, getDocs, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore"; // 👈 Added Firestore imports
+import { doc, collection, where, query, getDocs, getDoc, setDoc, updateDoc, serverTimestamp, increment } from "firebase/firestore"; // 👈 Added Firestore imports
 import { auth, db } from "@/firebase"; // 👈 Ensure db is imported
 
 
@@ -140,7 +140,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: user.email
       });
     }
+
+    // 🔁 Transfer Magic Prompt guest quota to this real account.
+    // If the user ran generations as an anonymous Firebase user before signing up,
+    // those gen_count values live in Firestore under the anonymous UID.
+    // We merge them into the real user's daily_stats so the quota carries over
+    // and the reload-bypass exploit (new incognito = new anon UID) is closed.
+    await transferAnonQuota(user.uid);
   };
+
+  // ─── Helper: merge anonymous Firestore quota into the real account ───────
+  const transferAnonQuota = async (realUid: string) => {
+    const anonUid = localStorage.getItem('tryam_anon_uid');
+    if (!anonUid || anonUid === realUid) return; // nothing to transfer
+
+    const today = new Date().toISOString().split('T')[0];
+    const anonRef = doc(db, `users/${anonUid}/daily_stats/${today}`);
+    const realRef = doc(db, `users/${realUid}/daily_stats/${today}`);
+
+    try {
+      const anonSnap = await getDoc(anonRef);
+      if (!anonSnap.exists()) return; // guest never generated anything
+
+      const anonData = anonSnap.data();
+      const anonGenCount = anonData.gen_count || 0;
+      const anonCheapCount = anonData.cheap_count || 0;
+
+      if (anonGenCount === 0 && anonCheapCount === 0) return;
+
+      // Merge into real user's daily stats (additive — they may have already
+      // used some generations with their real account today).
+      await setDoc(realRef, {
+        gen_count: increment(anonGenCount),
+        cheap_count: increment(anonCheapCount),
+        last_updated: serverTimestamp(),
+      }, { merge: true });
+
+      // Delete the anon daily_stats entry so it can't be transferred again.
+      // (We don't delete the whole user doc — Firebase does that for inactive anon users.)
+      const { deleteDoc } = await import('firebase/firestore');
+      await deleteDoc(anonRef);
+
+      // Clear the stored anon UID — transfer is done.
+      localStorage.removeItem('tryam_anon_uid');
+
+      console.log(`✅ Transferred ${anonGenCount} anon generations to real account ${realUid}`);
+    } catch (e) {
+      // Non-fatal — worst case the user gets a tiny bonus headroom, not a big deal.
+      console.warn('Anon quota transfer failed:', e);
+    }
+  }; // end transferAnonQuota
 
   const signIn = async (type: string, formData?: FormData) => {
     let currentUser: User | null = null;

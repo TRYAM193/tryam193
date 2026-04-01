@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"; // Ad
 import { useTranslation } from "@/hooks/use-translation";
 import Footer from "@/components/Footer";
 import { useEffect, useState } from "react";
+import MagicPromptPreview from "@/components/MagicPromptPreview";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/firebase";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -198,6 +199,16 @@ export default function Landing() {
               </Link>
             </motion.div>
 
+            {/* ✨ Magic Prompt Section */}
+            <motion.div
+              initial={{ opacity: 0, y: 32 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="mt-12 w-full"
+            >
+              <MagicPromptPreview />
+            </motion.div>
+
             {/* 👑 NEW: LIVE FOUNDING CREATOR SCARCITY COUNTER WITH INFO POPOVER */}
             {remainingSlots !== null && remainingSlots > 0 && remainingSlots <= 100 && (
               <motion.div
@@ -263,20 +274,7 @@ export default function Landing() {
               </motion.div>
             )}
 
-            {/* Hero Visual */}
-            <motion.div
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="mt-20 rounded-[2rem] border border-white/10 bg-white/5 backdrop-blur-sm aspect-[16/9] max-w-5xl mx-auto shadow-2xl shadow-blue-900/20 overflow-hidden relative ring-1 ring-white/10 group"
-            >
-              <img
-                src="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1000&auto=format&fit=crop"
-                alt="Apparel Mockup"
-                className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-1000"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent" />
-            </motion.div>
+
           </div>
         </section>
 

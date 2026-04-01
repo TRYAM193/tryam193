@@ -1959,7 +1959,7 @@ Ensure the design looks good on a t-shirt.`;
       }
 
       const response = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         contents: finalContents,
         config: {
           systemInstruction: systemInstruction,

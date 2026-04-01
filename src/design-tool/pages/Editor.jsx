@@ -232,6 +232,36 @@ export default function EditorPanel() {
         }
     }, []);
 
+    // ─── Magic Prompt Handoff: pick up preview from landing page ───
+    useEffect(() => {
+        const raw = sessionStorage.getItem('magic_preview_design');
+        if (!raw) return;
+        try {
+            const { objects, ts } = JSON.parse(raw);
+            // Only consume if fresher than 10 minutes
+            if (Date.now() - ts > 10 * 60 * 1000) {
+                sessionStorage.removeItem('magic_preview_design');
+                return;
+            }
+            if (Array.isArray(objects) && objects.length > 0) {
+                const mapped = objects.map((obj) => {
+                    const id = uuidv4();
+                    const rawProps = obj.props ? { ...obj.props } : { ...obj };
+                    delete rawProps.type;
+                    return { id, type: obj.type || 'textbox', props: rawProps };
+                });
+                dispatch(setCanvasObjects(mapped));
+                toast.success('✨ Magic Prompt design loaded!', {
+                    description: 'Your AI-generated design is ready to customize.',
+                    duration: 4000,
+                });
+            }
+        } catch (e) {
+            console.warn('Failed to restore magic preview:', e);
+        }
+        sessionStorage.removeItem('magic_preview_design');
+    }, [dispatch]);
+
     // ─── Unsaved Changes Detection ───
     useEffect(() => {
         if (past.length > 0) {

@@ -39,6 +39,7 @@ html,
     /* IE and Edge */
     scrollbar-width: none;
     /* Firefox */
+    -webkit-overflow-scrolling: touch;
   }
 
   /* 2. REMOVE NUMBER INPUT ARROWS (Spinners) */

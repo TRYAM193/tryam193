@@ -27,7 +27,7 @@ export default function MobileEditorLayout({
 
     const handleToolSelect = (toolId) => {
         if (toolId === 'product') setActivePanel('product');
-        else if (['shapes', 'ai', 'image', 'saved', 'templates', 'layers'].includes(toolId)) setActivePanel(toolId);
+        else if (['shapes', 'graphics', 'ai', 'image', 'saved', 'templates', 'layers'].includes(toolId)) setActivePanel(toolId);
         else if (toolId === 'text') setActivePanel('text');
     };
 
@@ -92,7 +92,7 @@ export default function MobileEditorLayout({
     const hasImages = dpiIssues.length > 0;
 
     return (
-        <div className="flex flex-col h-[100dvh] w-full bg-[#0f172a] relative overflow-hidden">
+        <div className="flex flex-col h-full w-full bg-[#0f172a] relative overflow-hidden">
             {/* 1. TOP HEADER */}
             <div className="absolute top-0 left-0 w-full z-30 px-4 py-3 flex justify-between items-center bg-gradient-to-b from-[#0f172a]/90 to-transparent pointer-events-none">
                 <div className="flex gap-2 pointer-events-auto">

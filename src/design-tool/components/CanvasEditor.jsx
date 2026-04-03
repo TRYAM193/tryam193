@@ -183,6 +183,29 @@ export default function CanvasEditor({
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      // 🗑️ HANDLE DELETE / BACKSPACE
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const activeObj = fabricCanvasRef.current?.getActiveObject();
+        // Prevent deletion if we're actively editing a text box
+        if (activeObj && !activeObj.isEditing) {
+          e.preventDefault();
+          onMenuAction('delete');
+        }
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        const activeObj = fabricCanvasRef.current?.getActiveObject();
+        if (activeObj && activeObj.isEditing) {
+          e.preventDefault();
+          activeObj.exitEditing();
+          // Force a modification event so Redux records the history
+          fabricCanvasRef.current.fire('object:modified', { target: activeObj });
+        }
+        return;
+      }
+
       if (e.ctrlKey || e.metaKey) {
         switch (e.key.toLowerCase()) {
           case 'c': e.preventDefault(); handleCopy(); break;
@@ -403,7 +426,8 @@ export default function CanvasEditor({
                 Math.abs(reduxObj.props.top - child.top) > 0.1 ||
                 Math.abs(reduxObj.props.scaleX - child.scaleX) > 0.01 ||
                 Math.abs(reduxObj.props.scaleY - child.scaleY) > 0.01 ||
-                Math.abs(reduxObj.props.angle - child.angle) > 0.1
+                Math.abs(reduxObj.props.angle - child.angle) > 0.1 ||
+                reduxObj.props.text !== child.text
               ) {
                 batchDeltas.push({
                   type: 'UPDATE',
@@ -411,12 +435,14 @@ export default function CanvasEditor({
                   before: {
                     left: reduxObj.props.left, top: reduxObj.props.top,
                     scaleX: reduxObj.props.scaleX, scaleY: reduxObj.props.scaleY,
-                    angle: reduxObj.props.angle, width: reduxObj.props.width, height: reduxObj.props.height
+                    angle: reduxObj.props.angle, width: reduxObj.props.width, height: reduxObj.props.height,
+                    text: reduxObj.props.text
                   },
                   after: {
                     left: child.left, top: child.top,
                     scaleX: child.scaleX, scaleY: child.scaleY,
-                    angle: child.angle, width: child.width, height: child.height
+                    angle: child.angle, width: child.width, height: child.height,
+                    text: child.text
                   }
                 });
               }
@@ -447,7 +473,8 @@ export default function CanvasEditor({
             Math.abs(reduxObj.props.top - obj.top) > 0.1 ||
             Math.abs(reduxObj.props.scaleX - obj.scaleX) > 0.01 ||
             Math.abs(reduxObj.props.scaleY - obj.scaleY) > 0.01 ||
-            Math.abs(reduxObj.props.angle - obj.angle) > 0.1
+            Math.abs(reduxObj.props.angle - obj.angle) > 0.1 ||
+            reduxObj.props.text !== obj.text
           ) {
             dispatch(dispatchDelta({
               type: 'UPDATE',
@@ -455,12 +482,14 @@ export default function CanvasEditor({
               before: {
                 left: reduxObj.props.left, top: reduxObj.props.top,
                 scaleX: reduxObj.props.scaleX, scaleY: reduxObj.props.scaleY,
-                angle: reduxObj.props.angle, width: reduxObj.props.width, height: reduxObj.props.height
+                angle: reduxObj.props.angle, width: reduxObj.props.width, height: reduxObj.props.height,
+                text: reduxObj.props.text
               },
               after: {
                 left: obj.left, top: obj.top,
                 scaleX: obj.scaleX, scaleY: obj.scaleY,
-                angle: obj.angle, width: obj.width, height: obj.height
+                angle: obj.angle, width: obj.width, height: obj.height,
+                text: obj.text
               }
             }));
           }
@@ -472,7 +501,38 @@ export default function CanvasEditor({
       const obj = e.target;
       if (!obj) return;
       obj.set('objectCaching', true);
-      if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') obj.set('paintFirst', 'stroke');
+      if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') {
+        obj.set('paintFirst', 'stroke');
+        obj.set('editable', false); // Disable on-canvas editing to prefer UI textarea
+      }
+    });
+
+    canvas.on('text:editing:entered', (e) => {
+      const obj = e.target;
+      if (obj && obj.hiddenTextarea) {
+        obj.hiddenTextarea.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            obj.exitEditing();
+            canvas.fire('object:modified', { target: obj });
+          }
+        });
+      }
+    });
+
+    canvas.on('mouse:dblclick', (e) => {
+      const target = e.target;
+      if (target && (target.type === 'i-text' || target.type === 'text' || target.type === 'textbox' || target.customType === 'text')) {
+        // Force exit any on-canvas editing that might have triggered
+        if (target.isEditing) target.exitEditing();
+        
+        // Delay slightly to allow the UI to switch to the correct property panel/sidebar first
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('focus-sidebar-text', { 
+            detail: { id: target.customId } 
+          }));
+        }, 100);
+      }
     });
 
     canvas.on('selection:created', handleSelection);
@@ -585,20 +645,71 @@ export default function CanvasEditor({
             try {
               const { objects, options } = await fabric.loadSVGFromString(objData.svgString);
               const svgGroup = fabric.util.groupSVGElements(objects, options);
-              const resolvedFill = resolveFillForFabric(objData.props.fill);
+              
+              let colorMap = objData.props.colorMap;
+              if (!colorMap && objects) {
+                colorMap = {};
+                const uniqueFills = new Set();
+                objects.forEach(path => {
+                  if (path.fill && typeof path.fill === 'string' && path.fill !== 'none') {
+                    uniqueFills.add(path.fill);
+                  }
+                  if (path.stroke && typeof path.stroke === 'string' && path.stroke !== 'none') {
+                    uniqueFills.add(path.stroke);
+                  }
+                });
+                [...uniqueFills].slice(0, 5).forEach(c => colorMap[c] = c);
+                
+                // Dispatch colorMap to Redux
+                setTimeout(() => {
+                  dispatch(dispatchDelta({
+                    type: 'UPDATE', targetId: objData.id,
+                    before: { colorMap: undefined },
+                    after: { colorMap }
+                  }));
+                }, 0);
+              }
+
               const resolvedStroke = resolveFillForFabric(objData.props.stroke);
-              svgGroup.set({ ...objData.props, customId: objData.id, customType: 'svg', fill: resolvedFill, stroke: resolvedStroke });
-              if (resolvedFill && svgGroup._objects) {
-                svgGroup._objects.forEach(path => path.set('fill', resolvedFill));
+              svgGroup.set({ ...objData.props, customId: objData.id, customType: 'svg', stroke: resolvedStroke });
+              
+              if (svgGroup._objects) {
+                svgGroup._objects.forEach(path => {
+                  path.originalFill = path.fill; // Store to allow dynamic mapping
+                  path.originalStroke = path.stroke;
+
+                  if (colorMap && path.originalFill && colorMap[path.originalFill]) {
+                    path.set('fill', resolveFillForFabric(colorMap[path.originalFill]));
+                  } else if (objData.props.fill && !colorMap) {
+                    path.set('fill', resolveFillForFabric(objData.props.fill));
+                  }
+
+                  if (colorMap && path.originalStroke && colorMap[path.originalStroke]) {
+                    path.set('stroke', resolveFillForFabric(colorMap[path.originalStroke]));
+                  }
+                });
               }
               fabricCanvas.add(svgGroup);
               fabricCanvas.requestRenderAll();
             } catch (err) { console.error("Failed to load SVG:", err); }
           } else {
             const resolvedProps = { ...objData.props };
-            if (resolvedProps.fill) resolvedProps.fill = resolveFillForFabric(resolvedProps.fill);
             if (resolvedProps.stroke) resolvedProps.stroke = resolveFillForFabric(resolvedProps.stroke);
             existing.set(resolvedProps);
+            
+            const colorMap = objData.props.colorMap;
+            if (colorMap && existing._objects) {
+               existing._objects.forEach(path => {
+                   if (path.originalFill && colorMap[path.originalFill]) {
+                       path.set('fill', resolveFillForFabric(colorMap[path.originalFill]));
+                   }
+                   if (path.originalStroke && colorMap[path.originalStroke]) {
+                       path.set('stroke', resolveFillForFabric(colorMap[path.originalStroke]));
+                   }
+               });
+            } else if (resolvedProps.fill && existing._objects) {
+               existing._objects.forEach(path => path.set('fill', resolveFillForFabric(resolvedProps.fill)));
+            }
             existing.setCoords();
           }
         }
@@ -649,11 +760,6 @@ export default function CanvasEditor({
       setCanvasObjects, setActiveTool, setSelectedId, handleCopy, handlePaste
     );
     if (action === 'delete') {
-      // Also dispatch a REMOVE delta when user deletes from the floating menu
-      selectedObjectUUIDs.forEach(id => {
-        const obj = canvasObjects.find(o => o.id === id);
-        if (obj) dispatch(dispatchDelta({ type: 'REMOVE', targetId: id, before: obj, after: null }));
-      });
       fabricCanvasRef.current?.discardActiveObject();
     }
   };

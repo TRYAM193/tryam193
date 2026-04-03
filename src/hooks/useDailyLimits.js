@@ -5,11 +5,12 @@ import { db } from '@/firebase';
 import { useAuth } from '@/hooks/use-auth';
 
 export function useDailyLimits() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [stats, setStats] = useState({ cheap_count: 0, gen_count: 0 });
 
-  const GEN_LIMIT = 5;   // Visible
-  const CHEAP_LIMIT = 50; // Invisible (Safety)
+  const isFounder = userProfile?.isFoundingCreator;
+  const GEN_LIMIT = isFounder ? 10 : 5;   // Visible
+  const CHEAP_LIMIT = isFounder ? 100 : 50; // Invisible (Safety)
 
   useEffect(() => {
     if (!user) return;

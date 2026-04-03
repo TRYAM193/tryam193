@@ -27,6 +27,7 @@ export default function SmartDock({
     { id: 'saved', label: 'Your Designs', icon: <BookMarkedIcon size={20} /> },
     { id: 'text', label: 'Text', icon: <Type size={20} /> },
     { id: 'shapes', label: 'Shapes', icon: <Shapes size={20} /> },
+    { id: 'graphics', label: 'Graphics', icon: <Sparkles size={20} /> },
     { id: 'image', label: 'Upload', icon: <ImagePlus size={20} /> },
     { id: 'ai', label: 'TRYAM AI', icon: <Sparkles size={20} className="text-purple-400" /> },
     { id: 'layers', label: 'Layers', icon: <Layers size={20} /> },
@@ -90,15 +91,15 @@ export default function SmartDock({
       ];
     }
 
-    // ✅ Shape Specific Tools
-    if (isShape) {
+    // ✅ Shape and SVG Specific Tools
+    if (isShape || isSvg) {
       // Line doesn't have fill
       const shapeTools = [];
       if (type !== 'line') shapeTools.push({ id: 'fill', label: 'Color', icon: <Palette size={20} /> });
 
-      shapeTools.push({ id: 'outline', label: 'Border', icon: <PenTool size={20} /> });
+      if (!isSvg) shapeTools.push({ id: 'outline', label: 'Border', icon: <PenTool size={20} /> });
 
-      if (supportsRadius) {
+      if (supportsRadius && !isSvg) {
         shapeTools.push({ id: 'radius', label: 'Roundness', icon: <Scan size={20} /> });
       }
 

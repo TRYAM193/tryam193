@@ -1885,8 +1885,8 @@ exports.generateFabricJson = functions
     if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Login required');
     const userId = context.auth.uid;
     const today = new Date().toISOString().split('T')[0];
-    const docRef = db.collection('users').doc(userId).collection('daily_stats').doc(today);
-    const MAX_GEN = 5; // 💎 Visible Limit
+    const userRef = db.collection('users').doc(userId);
+    const docRef = userRef.collection('daily_stats').doc(today);
 
     // We expect the key to be set in Firebase Secrets
     const apiKey = geminiSecret.value() || process.env.GEMINI_API_KEY;
@@ -1895,6 +1895,11 @@ exports.generateFabricJson = functions
     const ai = new GoogleGenAI({ apiKey });
 
     await db.runTransaction(async (t) => {
+      // Check if user is a Founding Creator
+      const userDoc = await t.get(userRef);
+      const isFounder = userDoc.exists ? userDoc.data().isFoundingCreator : false;
+      const MAX_GEN = isFounder ? 10 : 5; // 💎 Elevated Limit for Founders
+
       const doc = await t.get(docRef);
       const current = doc.exists ? (doc.data().gen_count || 0) : 0;
 

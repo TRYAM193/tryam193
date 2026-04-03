@@ -41,9 +41,12 @@ import ProtectedRoute from "./components/ProtectedRoute.tsx";
 import TemplatesPage from "./pages/TemplatesPage.tsx";
 import AboutPage from "./pages/AboutPage.tsx";
 
+import PageTitleManager from "./components/PageTitleManager";
+
 function RootLayout() {
   return (
     <>
+      <PageTitleManager />
       <RouteSyncer />
       <Outlet />
     </>

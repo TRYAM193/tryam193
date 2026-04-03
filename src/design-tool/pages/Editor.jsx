@@ -554,7 +554,7 @@ export default function EditorPanel() {
     const handleSaveSuccess = (savedDesignId) => {
         // Clear history so the page doesn't warn "unsaved changes" on exit
         dispatch(setCanvasObjects(canvasObjects));
-        
+
         // Update URL to reflect the new saved design so subsequent saves overwrite it
         if (savedDesignId) {
             setEditingDesignId(savedDesignId);
@@ -1169,7 +1169,6 @@ export default function EditorPanel() {
             setIsAddingToCart(false);
         }
     };
-    console.log(fabricCanvas?.getActiveObject())
 
     const handleBuyNow = async () => {
         if (!userId) { navigation('/auth'); return; }

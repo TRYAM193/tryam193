@@ -57,7 +57,7 @@ const FillPickerButton = ({ value, onChange, onTransparent, label = 'Fill Color'
         onClick={() => setOpen(!open)}
         className="w-full flex items-center gap-3 bg-slate-800/50 border border-white/10 hover:border-orange-500/50 rounded-xl px-3 py-2.5 transition-all group"
       >
-        <div className="w-6 h-6 rounded-md border-2 border-white/20 shrink-0" style={previewStyle} />
+        <div className="w-6 h-6 rounded-full border-2 border-white/20 shrink-0" style={previewStyle} />
         <span className="text-xs text-slate-300 flex-1 text-left">{label}</span>
         <span className={`text-slate-500 text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
       </button>
@@ -87,7 +87,7 @@ const FillPickerButton = ({ value, onChange, onTransparent, label = 'Fill Color'
                   <button
                     key={hex}
                     onClick={() => { onChange(hex); setOpen(false); }}
-                    className={`w-full aspect-square rounded-lg border-2 transition-all hover:scale-110 ${value === hex ? 'border-orange-500 scale-110' : 'border-white/10'
+                    className={`w-full aspect-square rounded-full border-2 transition-all hover:scale-110 ${value === hex ? 'border-orange-500 scale-110' : 'border-white/10'
                       }`}
                     style={{ backgroundColor: hex }}
                   />
@@ -99,7 +99,7 @@ const FillPickerButton = ({ value, onChange, onTransparent, label = 'Fill Color'
                   className="flex-1 flex items-center gap-2 bg-slate-900/60 border border-white/10 rounded-xl px-2 py-1.5 cursor-pointer hover:border-orange-500/50 transition-all"
                   onClick={() => colorInputRef.current?.click()}
                 >
-                  <div className="w-4 h-4 rounded border border-white/20 shrink-0" style={{ backgroundColor: solidColor }} />
+                  <div className="w-4 h-4 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: solidColor }} />
                   <span className="text-[10px] text-slate-300 font-mono uppercase flex-1 truncate">{solidColor}</span>
                   <input ref={colorInputRef} type="color" className="sr-only" value={solidColor}
                     onChange={(e) => onChange(e.target.value)} />
@@ -127,7 +127,7 @@ const FillPickerButton = ({ value, onChange, onTransparent, label = 'Fill Color'
                     className="flex flex-col items-center gap-1 group"
                   >
                     <div
-                      className="w-full aspect-square rounded-xl border-2 border-white/10 group-hover:border-orange-400 transition-all"
+                      className="w-full aspect-square rounded-full border-2 border-white/10 group-hover:border-orange-400 transition-all"
                       style={{ background: gradientToCSS(p.from, p.to, p.angle) }}
                     />
                     <span className="text-[9px] text-slate-500 group-hover:text-orange-400 truncate w-full text-center">{p.name}</span>
@@ -142,7 +142,7 @@ const FillPickerButton = ({ value, onChange, onTransparent, label = 'Fill Color'
                     className="flex items-center gap-2 bg-slate-900/60 border border-white/10 rounded-xl px-2 py-2 cursor-pointer hover:border-orange-500/40 transition-all"
                     onClick={() => ref.current?.click()}
                   >
-                    <div className="w-4 h-4 rounded border border-white/20 shrink-0" style={{ backgroundColor: color }} />
+                    <div className="w-4 h-4 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: color }} />
                     <div className="flex flex-col min-w-0">
                       <span className="text-[9px] text-slate-500 uppercase">{label}</span>
                       <span className="text-[10px] text-slate-300 font-mono truncate">{color}</span>
@@ -324,6 +324,24 @@ function liveUpdateFabric(fabricCanvas, id, updates, currentLiveProps, object) {
   if (finalUpdates.stroke) finalUpdates.stroke = resolveFillForFabric(finalUpdates.stroke);
 
   const type = object.type;
+  
+  if (updates.colorMap && type === 'svg') {
+     const newColorMap = updates.colorMap;
+     if (existing._objects) {
+         existing._objects.forEach(path => {
+             if (path.originalFill && newColorMap[path.originalFill]) {
+                 path.set('fill', resolveFillForFabric(newColorMap[path.originalFill]));
+             }
+             if (path.originalStroke && newColorMap[path.originalStroke]) {
+                 path.set('stroke', resolveFillForFabric(newColorMap[path.originalStroke]));
+             }
+         });
+     }
+     existing.set('colorMap', newColorMap); // Sync Fabric object
+     fabricCanvas.requestRenderAll();
+     return;
+  }
+
   const shapeTypes = ['star', 'pentagon', 'hexagon', 'triangle', 'arrow', 'diamond', 'trapezoid', 'lightning'];
 
   if (shapeTypes.includes(type) && (updates.radius !== undefined || updates.rx !== undefined)) {
@@ -661,6 +679,12 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
                   textareaRef.current.selectionEnd = cursor;
                 });
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                }
+              }}
               onBlur={() => {
                 isTypingRef.current = false;
                 handleUpdateAndHistory('text', localText); // history + final commit
@@ -761,7 +785,7 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
             <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
               <div className="flex justify-between items-center">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Text Outline</label>
-                <input type="color" className="w-5 h-5 rounded cursor-pointer bg-transparent border-none p-0" value={liveProps.stroke || '#000000'} onChange={(e) => {
+                <input type="color" className="w-5 h-5 rounded-full cursor-pointer bg-transparent border-none p-0" value={liveProps.stroke || '#000000'} onChange={(e) => {
                   handleColorChange('stroke', e.target.value);
                 }} />
               </div>
@@ -783,12 +807,31 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
 
           {/* Fill Color — full width with gradient support */}
           {type !== 'line' && (
-            <FillPickerButton
-              label="Fill Color"
-              value={liveProps.fill}
-              onChange={(val) => handleColorChange('fill', val)}
-              onTransparent={() => handleUpdateAndHistory('fill', null)}
-            />
+            isSvg && liveProps.colorMap && Object.keys(liveProps.colorMap).length > 0 ? (
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Graphic Colors</label>
+                {Object.entries(liveProps.colorMap).map(([originalColor, currentColor], index) => (
+                  <FillPickerButton
+                    key={originalColor}
+                    label={`Color ${index + 1}`}
+                    value={currentColor}
+                    onChange={(val) => {
+                      const newColorMap = { ...liveProps.colorMap, [originalColor]: val };
+                      setLiveProps(prev => ({ ...prev, colorMap: newColorMap }));
+                      if (colorCommitTimer.current) clearTimeout(colorCommitTimer.current);
+                      colorCommitTimer.current = setTimeout(() => { handleUpdateAndHistory('colorMap', newColorMap); }, 300);
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <FillPickerButton
+                label="Fill Color"
+                value={liveProps.fill}
+                onChange={(val) => handleColorChange('fill', val)}
+                onTransparent={() => handleUpdateAndHistory('fill', null)}
+              />
+            )
           )}
 
           {/* Border Color + Width — stacked below fill */}
@@ -797,7 +840,7 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
               <span className="text-xs text-slate-300">Border Color</span>
               <div className="flex items-center gap-2">
                 <div
-                  className="w-6 h-6 rounded-md border-2 border-white/20 cursor-pointer hover:border-orange-400 transition-all shrink-0"
+                  className="w-6 h-6 rounded-full border-2 border-white/20 cursor-pointer hover:border-orange-400 transition-all shrink-0"
                   style={{ backgroundColor: liveProps.stroke || '#000000' }}
                   onClick={(e) => e.currentTarget.nextSibling?.click()}
                 />

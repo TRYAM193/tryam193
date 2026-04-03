@@ -1,5 +1,5 @@
-// src/design-tool/mobile/PropertyControlBox.jsx
 import React, { useState, useEffect, useRef } from 'react';
+import { HexColorPicker } from 'react-colorful';
 import { GRADIENT_PRESETS, buildGradient, parseGradientState, gradientToCSS, resolveFillForFabric } from '@/design-tool/utils/gradientUtils';
 import {
     Check, Plus, Bold, Italic, Underline,
@@ -19,10 +19,35 @@ import {
     getArrowPoints, getDiamondPoints, getTrapezoidPoints, getLightningPoints
 } from '@/design-tool/utils/shapeUtils';
 
-// --- 1. LIVE UPDATE LOGIC (UNCHANGED) ---
-function liveUpdateFabric(fabricCanvas, id, updates, currentLiveProps, object) {
+// Premium Dark Theme Overrides for react-colorful
+const PICKER_STYLES = `
+  .react-colorful {
+    width: 100% !important;
+    height: 180px !important;
+    border-radius: 12px !important;
+    border: none !important;
+  }
+  .react-colorful__saturation {
+    border-radius: 12px 12px 0 0 !important;
+    border-bottom: 2px solid rgba(0,0,0,0.2) !important;
+  }
+  .react-colorful__hue {
+    height: 20px !important;
+    border-radius: 0 0 12px 12px !important;
+  }
+  .react-colorful__pointer {
+    width: 22px !important;
+    height: 22px !important;
+    border: 3px solid #fff !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
+  }
+`;
+
+// --- 1. LIVE UPDATE LOGIC (Optimized) ---
+function liveUpdateFabric(fabricCanvas, id, updates, currentLiveProps, object, existingObject = null) {
     if (!fabricCanvas) return;
-    const existing = fabricCanvas.getObjects().find((o) => o.customId === id);
+    // Cache the object search during interactions for performance
+    const existing = existingObject || fabricCanvas.getObjects().find((o) => o.customId === id);
     if (!existing) return;
 
     let finalUpdates = { ...updates };
@@ -41,11 +66,28 @@ function liveUpdateFabric(fabricCanvas, id, updates, currentLiveProps, object) {
         shadowKeys.forEach(key => delete finalUpdates[key]);
     }
 
-    // Resolve fills and strokes (Redux plain data -> Fabric instances)
     if (finalUpdates.fill) finalUpdates.fill = resolveFillForFabric(finalUpdates.fill);
     if (finalUpdates.stroke) finalUpdates.stroke = resolveFillForFabric(finalUpdates.stroke);
 
     const type = object.type;
+
+    if (updates.colorMap && type === 'svg') {
+        const newColorMap = updates.colorMap;
+        if (existing._objects) {
+            existing._objects.forEach(path => {
+                if (path.originalFill && newColorMap[path.originalFill]) {
+                    path.set('fill', resolveFillForFabric(newColorMap[path.originalFill]));
+                }
+                if (path.originalStroke && newColorMap[path.originalStroke]) {
+                    path.set('stroke', resolveFillForFabric(newColorMap[path.originalStroke]));
+                }
+            });
+        }
+        existing.set('colorMap', newColorMap);
+        fabricCanvas.requestRenderAll();
+        return;
+    }
+
     const shapeTypes = ['star', 'pentagon', 'hexagon', 'triangle', 'arrow', 'diamond', 'trapezoid', 'lightning'];
 
     if (shapeTypes.includes(type) && (updates.radius !== undefined || updates.rx !== undefined)) {
@@ -83,7 +125,6 @@ function liveUpdateFabric(fabricCanvas, id, updates, currentLiveProps, object) {
 
     existing.set(finalUpdates);
 
-    // Text Special Case
     if (existing.type === 'text') {
         if (finalUpdates.text !== undefined || finalUpdates.fontFamily !== undefined || finalUpdates.fontSize !== undefined) {
             existing.initDimensions();
@@ -117,113 +158,145 @@ const createFabricShadow = (color, blur, offsetX, offsetY) => {
 };
 
 
-// --- 2. IMPROVED LIVE SLIDER (Float Support) ---
+// --- 2. IMPROVED LIVE SLIDER (Scrubbable Input - Optimized from Toolbar.jsx) ---
 const LiveSlider = ({ label, value, min, max, step, object, propKey, updateObject, fabricCanvas, displayMultiplier = 1, onCommitOverride }) => {
     const startX = useRef(0);
     const startVal = useRef(0);
+    const hasMoved = useRef(false);
+    const cachedObject = useRef(null);
     const [localVal, setLocalVal] = useState(value ?? 0);
+    const latestValRef = useRef(value ?? 0);
+    const inputRef = useRef(null);
 
-    useEffect(() => { setLocalVal(value ?? 0); }, [value, object.id]);
+    useEffect(() => { 
+        setLocalVal(value ?? 0); 
+        latestValRef.current = value ?? 0;
+    }, [value, object.id]);
 
     const updateValue = (newVal) => {
         if (min !== undefined) newVal = Math.max(min, newVal);
         if (max !== undefined) newVal = Math.min(max, newVal);
-
-        // ✅ Float Precision Fix
         const decimals = step < 1 ? 2 : 0;
         newVal = parseFloat(newVal.toFixed(decimals));
-
         setLocalVal(newVal);
+        latestValRef.current = newVal;
 
         const fabricValue = newVal / displayMultiplier;
         const props = object.props || object;
-        liveUpdateFabric(fabricCanvas, object.id, { [propKey]: fabricValue }, props, object);
+        liveUpdateFabric(fabricCanvas, object.id, { [propKey]: fabricValue }, props, object, cachedObject.current);
     };
 
     const commitValue = (finalVal) => {
         if (min !== undefined) finalVal = Math.max(min, finalVal);
         if (max !== undefined) finalVal = Math.min(max, finalVal);
-
-        // ✅ Float Precision Fix
         const decimals = step < 1 ? 2 : 0;
         finalVal = parseFloat(finalVal.toFixed(decimals));
 
         const fabricVal = finalVal / displayMultiplier;
+        if (onCommitOverride) onCommitOverride(fabricVal);
+        else updateObject(object.id, { [propKey]: fabricVal });
+    };
 
-        if (onCommitOverride) {
-            onCommitOverride(fabricVal);
-        } else {
-            updateObject(object.id, { [propKey]: fabricVal });
+    const beginInteraction = (clientX) => {
+        startX.current = clientX;
+        startVal.current = latestValRef.current;
+        hasMoved.current = false;
+        if (fabricCanvas) {
+            cachedObject.current = fabricCanvas.getObjects().find(o => o.customId === object.id);
         }
     };
 
-    // --- MOUSE ---
     const handleMouseDown = (e) => {
-        e.preventDefault();
-        startX.current = e.clientX;
-        startVal.current = localVal;
-        document.body.style.cursor = 'ew-resize';
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
+        beginInteraction(e.clientX);
+        const onMouseMove = (moveEv) => {
+            const deltaX = moveEv.clientX - startX.current;
+            if (Math.abs(deltaX) > 3) {
+                hasMoved.current = true;
+                document.body.style.cursor = 'ew-resize';
+                updateValue(startVal.current + (deltaX * step));
+            }
+        };
+        const onMouseUp = (e) => {
+            document.body.style.cursor = 'default';
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+            if (hasMoved.current) {
+                commitValue(latestValRef.current);
+            } else {
+                // Trigger focus for manual typing if it was a simple click
+                inputRef.current?.focus();
+                inputRef.current?.select();
+            }
+            cachedObject.current = null;
+        };
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
     };
 
-    const handleMouseMove = (e) => {
-        const delta = (e.clientX - startX.current) * step;
-        updateValue(startVal.current + delta); // No Math.round here for floats
-    };
-
-    const handleMouseUp = (e) => {
-        document.body.style.cursor = 'default';
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-        const delta = (e.clientX - startX.current) * step;
-        commitValue(startVal.current + delta);
-    };
-
-    // --- TOUCH ---
     const handleTouchStart = (e) => {
-        startX.current = e.touches[0].clientX;
-        startVal.current = localVal;
-        document.addEventListener('touchmove', handleTouchMove, { passive: false });
-        document.addEventListener('touchend', safeTouchEnd);
-    };
-
-    const handleTouchMove = (e) => {
-        e.preventDefault();
-        const delta = (e.touches[0].clientX - startX.current) * step * 0.8;
-        updateValue(startVal.current + delta);
-    };
-
-    const latestVal = useRef(value);
-    useEffect(() => { latestVal.current = localVal; }, [localVal]);
-
-    const safeTouchEnd = () => {
-        document.removeEventListener('touchmove', handleTouchMove);
-        document.removeEventListener('touchend', safeTouchEnd);
-        commitValue(latestVal.current);
+        const touch = e.touches[0];
+        beginInteraction(touch.clientX);
+        const onTouchMove = (moveEv) => {
+            const currentTouch = moveEv.touches[0];
+            const deltaX = currentTouch.clientX - startX.current;
+            if (Math.abs(deltaX) > 3) {
+                if (moveEv.cancelable) moveEv.preventDefault();
+                hasMoved.current = true;
+                updateValue(startVal.current + (deltaX * step));
+            }
+        };
+        const onTouchEnd = (e) => {
+            window.removeEventListener('touchmove', onTouchMove);
+            window.removeEventListener('touchend', onTouchEnd);
+            if (hasMoved.current) {
+                commitValue(latestValRef.current);
+            } else {
+                // Mobile Tap: Trigger focus for keyboard entry
+                inputRef.current?.focus();
+                inputRef.current?.select();
+            }
+            cachedObject.current = null;
+        };
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+        window.addEventListener('touchend', onTouchEnd);
     };
 
     return (
-        <div className="flex items-center gap-3 mb-3 animate-in fade-in duration-300">
-            <div
-                className="flex items-center gap-1.5 w-20 cursor-ew-resize touch-none select-none text-slate-400 active:text-orange-400 transition-colors"
+        <div className="flex items-center gap-3 mb-3 animate-in fade-in duration-300 group select-none">
+            {/* Scrubbable Label Area */}
+            <div 
+                className="flex items-center gap-1.5 w-16 cursor-ew-resize touch-none active:text-orange-400 transition-colors"
                 onMouseDown={handleMouseDown}
                 onTouchStart={handleTouchStart}
             >
-                <span className="text-[11px] font-bold uppercase tracking-wider truncate">{label}</span>
+                <div className="flex flex-col gap-0.5 opacity-50">
+                    <div className="w-2.5 h-0.5 bg-slate-400 rounded-full" />
+                    <div className="w-2.5 h-0.5 bg-slate-400 rounded-full" />
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">{label}</span>
             </div>
 
-            <div className="flex-1 relative h-9 bg-slate-800/50 rounded-lg border border-white/5 overflow-hidden group hover:border-white/20 transition-all">
-                {min !== undefined && max !== undefined && (
-                    <div
-                        className="absolute top-0 left-0 h-full bg-orange-500/10 pointer-events-none transition-all duration-75"
-                        style={{ width: `${Math.min(100, Math.max(0, ((localVal - min) / (max - min)) * 100))}%` }}
-                    />
-                )}
+            {/* Input & Scrubbing Zone */}
+            <div className="flex-1 relative h-9 bg-slate-800/50 rounded-lg border border-white/5 overflow-hidden transition-all group-hover:border-white/10 active:border-orange-500/50">
+                {/* Visual Progress Bar (Matches Toolbar.jsx) */}
+                <div
+                    className="absolute top-0 left-0 h-full bg-orange-500/10 pointer-events-none"
+                    style={{ width: `${Math.min(100, Math.max(0, ((localVal - min) / (max - min)) * 100))}%` }}
+                />
+                
+                {/* Drag Overlay (Transparent but captures gestures) */}
+                <div 
+                    className="absolute inset-0 z-20 cursor-ew-resize touch-none"
+                    onMouseDown={handleMouseDown}
+                    onTouchStart={handleTouchStart}
+                />
+
+                {/* Number Input (Matches Toolbar.jsx style but on mobile) */}
                 <input
+                    ref={inputRef}
                     type="number"
                     step={step}
-                    className="w-full h-full bg-transparent text-sm font-medium text-white px-3 focus:outline-none text-right relative z-10 appearance-none m-0"
+                    className="w-full h-full bg-transparent text-sm font-mono text-white px-3 focus:outline-none text-right relative z-10 appearance-none m-0 pointer-events-auto"
                     value={step < 1 ? Number(localVal).toFixed(2) : Math.round(localVal)}
                     onChange={(e) => updateValue(Number(e.target.value))}
                     onBlur={(e) => commitValue(Number(e.target.value))}
@@ -234,7 +307,323 @@ const LiveSlider = ({ label, value, min, max, step, object, propKey, updateObjec
     );
 };
 
-// --- 3. MAIN COMPONENT ---
+// --- HELPER COMPONENTS (outside main to preserve state) ---
+
+const ScrubbablePalette = ({ currentFill, onSelect, PALETTE, object, fabricCanvas, targetProp }) => {
+    const [localFill, setLocalFill] = useState(currentFill);
+    const cachedObject = useRef(null);
+
+    useEffect(() => { setLocalFill(currentFill); }, [currentFill]);
+
+    const handleMove = (clientX, clientY) => {
+        const element = document.elementFromPoint(clientX, clientY);
+        if (element && element.dataset.hex) {
+            const hex = element.dataset.hex;
+            if (hex !== localFill) {
+                setLocalFill(hex);
+                if (fabricCanvas && object) {
+                    if (!cachedObject.current) {
+                        cachedObject.current = fabricCanvas.getObjects().find(o => o.customId === object.id);
+                    }
+                    const props = object.props || object;
+                    liveUpdateFabric(fabricCanvas, object.id, { [targetProp]: hex }, props, object, cachedObject.current);
+                }
+            }
+        }
+    };
+
+    const handleTouchMove = (e) => {
+        if (e.cancelable) e.preventDefault();
+        const touch = e.touches[0];
+        handleMove(touch.clientX, touch.clientY);
+    };
+
+    const handleEnd = () => {
+        onSelect(localFill);
+        cachedObject.current = null;
+    };
+
+    return (
+        <div
+            className="grid grid-cols-8 gap-2 max-h-[140px] overflow-y-auto no-scrollbar scroll-smooth pb-2 pr-1 touch-pan-x"
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleEnd}
+        >
+            {PALETTE.map((hex) => (
+                <button
+                    key={hex}
+                    data-hex={hex}
+                    onMouseDown={() => handleMove(0, 0)} // placeholder
+                    onClick={() => onSelect(hex)}
+                    className={`w-full aspect-square rounded-full border-2 transition-all active:scale-95 ${localFill === hex
+                        ? 'border-orange-500 scale-110 shadow-lg shadow-orange-500/30'
+                        : 'border-white/10'
+                        }`}
+                    style={{ backgroundColor: hex }}
+                />
+            ))}
+        </div>
+    );
+};
+
+const CustomColorToggle = ({ value, onChange, label = "Custom", object, fabricCanvas }) => {
+    const [show, setShow] = useState(false);
+    const [localColor, setLocalColor] = useState(value);
+    const containerRef = useRef(null);
+    const safeColor = (typeof localColor === 'string' && localColor.startsWith('#')) ? localColor : '#ffffff';
+
+    // Update local state if external value changes (but not during active picking)
+    useEffect(() => {
+        setLocalColor(value);
+    }, [value]);
+
+    useEffect(() => {
+        if (show && containerRef.current) {
+            setTimeout(() => {
+                containerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 150);
+        }
+    }, [show]);
+
+    const handlePickerChange = (color) => {
+        setLocalColor(color);
+        // Direct Live Update bypasses Redux for butter-smooth feel
+        if (fabricCanvas && object) {
+            const currentProps = object.props || object;
+            // Determine if we're updating fill or stroke (heuristic)
+            const propKey = label.toLowerCase().includes('outline') ? 'stroke' : 'fill';
+            liveUpdateFabric(fabricCanvas, object.id, { [propKey]: color }, currentProps, object);
+        }
+    };
+
+    const handleCommit = (color) => {
+        onChange(color); // Sync to Redux
+    };
+
+    return (
+        <div className="flex flex-col gap-3" ref={containerRef}>
+            <div
+                className={`flex items-center gap-3 bg-slate-800/60 border rounded-xl px-3 py-2.5 cursor-pointer transition-all hover:bg-slate-800/80 ${show ? 'border-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'border-white/10'}`}
+                onClick={() => {
+                    setShow(!show);
+                }}
+            >
+                <div className="w-6 h-6 rounded-full border-2 border-white/20 shrink-0 shadow-sm" style={{ backgroundColor: safeColor }} />
+                <span className="text-xs text-slate-200 font-mono flex-1 uppercase tracking-widest">{safeColor}</span>
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">{label}</span>
+                    <div className={`text-slate-500 transition-transform duration-300 ${show ? 'rotate-180' : ''}`}>
+                        <ArrowDown size={14} />
+                    </div>
+                </div>
+            </div>
+            {show && (
+                <div
+                    className="flex flex-col gap-4 p-4 bg-slate-900/40 rounded-2xl border border-white/5 animate-in fade-in zoom-in-95 duration-200"
+                >
+                    <div onPointerUp={() => handleCommit(localColor)}>
+                        <HexColorPicker
+                            color={safeColor}
+                            onChange={handlePickerChange}
+                            className="w-full !h-48"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <div className="flex items-center gap-2 bg-slate-800/40 rounded-lg px-2 py-1.5 border border-white/5">
+                            <span className="text-[9px] text-slate-500 uppercase font-bold">HEX</span>
+                            <input
+                                type="text"
+                                value={safeColor}
+                                onChange={(e) => {
+                                    handlePickerChange(e.target.value);
+                                    handleCommit(e.target.value);
+                                }}
+                                className="bg-transparent text-xs text-white font-mono w-full focus:outline-none"
+                            />
+                        </div>
+                        <button
+                            onClick={() => {
+                                handleCommit(localColor);
+                                setShow(false);
+                            }}
+                            className="bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-[10px] font-bold uppercase py-1.5 rounded-lg border border-orange-500/20 transition-all"
+                        >
+                            Done
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const PALETTE = [
+    // Neutrals
+    '#ffffff', '#f1f5f9', '#94a3b8', '#64748b', '#334155', '#0f172a', '#000000',
+    // Warm
+    '#fef3c7', '#fde68a', '#fbbf24', '#f59e0b', '#d97706', '#b45309', '#92400e',
+    // Orange / Red
+    '#fed7aa', '#fb923c', '#f97316', '#ef4444', '#dc2626', '#b91c1c', '#991b1b',
+    '#fbcfe8', '#f472b6', '#ec4899', '#a855f7', '#9333ea', '#7c3aed', '#4f46e5',
+    // Blue / Cyan
+    '#bfdbfe', '#60a5fa', '#3b82f6', '#06b6d4', '#0ea5e9', '#0284c7', '#1d4ed8',
+    // Green
+    '#bbf7d0', '#4ade80', '#22c55e', '#16a34a', '#15803d', '#166534', '#14532d',
+];
+
+const GradientFillPicker = ({ currentFill, onChange, label, object, fabricCanvas }) => {
+    const gradState = parseGradientState(currentFill);
+    const [fillMode, setFillMode] = useState(gradState.mode);
+    const [gradType, setGradType] = useState(gradState.type);
+    const [gradAngle, setGradAngle] = useState(gradState.angle);
+    const [fromColor, setFromColor] = useState(gradState.from);
+    const [toColor, setToColor] = useState(gradState.to);
+    const [open, setOpen] = useState(!label); // collapse by default if it has a label
+    const solidColor = typeof currentFill === 'string' ? currentFill : (gradState.from || '#ffffff');
+
+    const applyColor = (val) => {
+        onChange(val);
+    };
+
+    const applyGradient = (f = fromColor, t = toColor, a = gradAngle, gt = gradType) => {
+        const grad = buildGradient(gt, a, f, t);
+        applyColor(grad);
+    };
+
+    return (
+        <div className="flex flex-col gap-4">
+            {/* Collapsed Trigger Button */}
+            {label && (
+                <button
+                    onClick={() => setOpen(!open)}
+                    className="w-full flex items-center gap-3 bg-slate-800/50 border border-white/10 rounded-xl px-3 py-2.5 transition-all group"
+                >
+                    <div className="w-6 h-6 rounded-full border-2 border-white/20 shrink-0" style={{ background: fillMode === 'solid' ? solidColor : gradientToCSS(fromColor, toColor, gradAngle) }} />
+                    <span className="text-xs font-bold text-slate-300 flex-1 text-left uppercase tracking-wider">{label}</span>
+                    <span className={`text-slate-500 text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
+                </button>
+            )}
+
+            {/* Expanded Content */}
+            {open && (
+                <div className={label ? "flex flex-col gap-4 pl-2 border-l-2 border-slate-700/50 ml-3 pt-2" : "flex flex-col gap-4"}>
+                    {/* Tab toggle */}
+                    <div className="flex p-1 bg-slate-900/80 rounded-xl border border-white/5">
+                        {['solid', 'gradient'].map((mode) => (
+                            <button
+                                key={mode}
+                                onClick={() => setFillMode(mode)}
+                                className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${fillMode === mode
+                                    ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
+                                    : 'text-slate-400 hover:text-white'
+                                    }`}
+                            >
+                                {mode === 'solid' ? '◼ Solid' : '◑ Gradient'}
+                            </button>
+                        ))}
+                    </div>
+
+                    {fillMode === 'solid' ? (
+                        <div className="flex flex-col gap-3">
+                            <ScrubbablePalette
+                                currentFill={currentFill}
+                                onSelect={(hex) => applyColor(hex)}
+                                PALETTE={PALETTE}
+                                object={object}
+                                fabricCanvas={fabricCanvas}
+                                targetProp="fill"
+                            />
+                            <CustomColorToggle
+                                value={solidColor}
+                                onChange={(val) => applyColor(val)}
+                                object={object}
+                                fabricCanvas={fabricCanvas}
+                                label={label || 'Custom'}
+                            />
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-4">
+                            {/* Preset pills */}
+                            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+                                {GRADIENT_PRESETS.map((p) => (
+                                    <button
+                                        key={p.name}
+                                        onClick={() => {
+                                            setFromColor(p.from); setToColor(p.to);
+                                            setGradAngle(p.angle); setGradType('linear');
+                                            applyGradient(p.from, p.to, p.angle, 'linear');
+                                        }}
+                                        className="shrink-0 flex flex-col items-center gap-1 group"
+                                    >
+                                        <div
+                                            className="w-10 h-10 rounded-full border-2 border-white/10 group-hover:border-orange-400 transition-all shadow"
+                                            style={{ background: gradientToCSS(p.from, p.to, p.angle) }}
+                                        />
+                                        <span className="text-[9px] text-slate-500 group-hover:text-orange-400 transition-colors">{p.name}</span>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* From / To pickers */}
+                            <div className="flex flex-col gap-2">
+                                <CustomColorToggle
+                                    label="Gradient Start"
+                                    value={fromColor}
+                                    onChange={(val) => { setFromColor(val); applyGradient(val, toColor); }}
+                                    object={object}
+                                    fabricCanvas={fabricCanvas}
+                                />
+                                <CustomColorToggle
+                                    label="Gradient End"
+                                    value={toColor}
+                                    onChange={(val) => { setToColor(val); applyGradient(fromColor, val); }}
+                                    object={object}
+                                    fabricCanvas={fabricCanvas}
+                                />
+                            </div>
+
+                            {/* Live preview bar */}
+                            <div
+                                className="h-8 rounded-xl border border-white/10 shadow-inner"
+                                style={{ background: gradientToCSS(fromColor, toColor, gradAngle) }}
+                            />
+
+                            {/* Linear / Radial toggle */}
+                            <div className="flex gap-2">
+                                {['linear', 'radial'].map((t) => (
+                                    <button
+                                        key={t}
+                                        onClick={() => { setGradType(t); applyGradient(fromColor, toColor, gradAngle, t); }}
+                                        className={`flex-1 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all ${gradType === t
+                                            ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
+                                            : 'bg-slate-800/60 border-white/10 text-slate-500 hover:text-white'
+                                            }`}
+                                    >
+                                        {t === 'linear' ? '↗ Linear' : '◎ Radial'}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Angle slider */}
+                            {gradType === 'linear' && (
+                                <div className="flex items-center gap-3">
+                                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 w-12 shrink-0">Angle</span>
+                                    <input
+                                        type="range" min={0} max={360} step={5} value={gradAngle}
+                                        className="flex-1 accent-orange-500 h-1.5 cursor-pointer"
+                                        onChange={(e) => { const a = Number(e.target.value); setGradAngle(a); applyGradient(fromColor, toColor, a, gradType); }}
+                                    />
+                                    <span className="text-xs text-slate-300 w-9 text-right font-mono shrink-0">{gradAngle}°</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
 export default function PropertyControlBox({ activeProperty, object, updateObject, onClose, fabricCanvas, updateDpiForObject, onAiLoadingStart, onAiLoadingEnd, printDimensions = { w: 4500, h: 5400 } }) {
     if (!activeProperty || !object) return null;
 
@@ -332,208 +721,61 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
 
     // --- RENDERERS ---
 
-    // Curated frequently-used design colors
-    const PALETTE = [
-        // Neutrals
-        '#ffffff', '#f1f5f9', '#94a3b8', '#64748b', '#334155', '#0f172a', '#000000',
-        // Warm
-        '#fef3c7', '#fde68a', '#fbbf24', '#f59e0b', '#d97706', '#b45309', '#92400e',
-        // Orange / Red
-        '#fed7aa', '#fb923c', '#f97316', '#ef4444', '#dc2626', '#b91c1c', '#991b1b',
-        // Pink / Purple
-        '#fbcfe8', '#f472b6', '#ec4899', '#a855f7', '#9333ea', '#7c3aed', '#4f46e5',
-        // Blue / Cyan
-        '#bfdbfe', '#60a5fa', '#3b82f6', '#06b6d4', '#0ea5e9', '#0284c7', '#1d4ed8',
-        // Green
-        '#bbf7d0', '#4ade80', '#22c55e', '#16a34a', '#15803d', '#166534', '#14532d',
-    ];
-
-
     const renderColorPicker = (targetProp) => {
         const currentFill = getValue(targetProp);
-        const inputRef = React.useRef(null);
-        const safeColor = (typeof currentFill === 'string' && currentFill.startsWith('#')) ? currentFill : '#ffffff';
-        return (
-            <div className="flex flex-col gap-3">
-                <div className="flex gap-2 pb-1 overflow-x-auto no-scrollbar">
-                    {PALETTE.map((hex) => (
-                        <button
-                            key={hex}
-                            onClick={() => handleUpdate(targetProp, hex)}
-                            className={`w-8 h-8 rounded-full shrink-0 border-2 transition-all active:scale-90 ${currentFill === hex
-                                ? 'border-orange-500 scale-110 shadow-lg shadow-orange-500/30'
-                                : 'border-white/10 hover:border-white/30'
-                                }`}
-                            style={{ backgroundColor: hex }}
-                        />
-                    ))}
-                </div>
-                <div
-                    className="flex items-center gap-3 bg-slate-800/60 border border-white/10 rounded-xl px-3 py-2 cursor-pointer hover:border-orange-500/50 transition-all"
-                    onClick={() => inputRef.current?.click()}
-                >
-                    <div className="w-7 h-7 rounded-lg border-2 border-white/20 shrink-0" style={{ backgroundColor: safeColor }} />
-                    <span className="text-sm text-slate-300 font-mono flex-1 uppercase tracking-widest">{safeColor}</span>
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider">Custom</span>
-                    <input ref={inputRef} type="color" className="sr-only" value={safeColor} onChange={(e) => handleUpdate(targetProp, e.target.value)} />
-                </div>
-            </div>
-        );
-    };
-
-    // ---- FILL picker with Solid | Gradient tabs (object fill only) ----
-    const GradientFillPicker = ({ targetProp }) => {
-        const currentFill = getValue(targetProp);
-        const gradState = parseGradientState(currentFill);
-        const [fillMode, setFillMode] = useState(gradState.mode);
-        const [gradType, setGradType] = useState(gradState.type);
-        const [gradAngle, setGradAngle] = useState(gradState.angle);
-        const [fromColor, setFromColor] = useState(gradState.from);
-        const [toColor, setToColor] = useState(gradState.to);
-        const fromRef = useRef(null);
-        const toRef = useRef(null);
-        const solidInputRef = useRef(null);
-        const solidColor = typeof currentFill === 'string' ? currentFill : (gradState.from || '#ffffff');
-
-        const applyGradient = (f = fromColor, t = toColor, a = gradAngle, gt = gradType) => {
-            const grad = buildGradient(gt, a, f, t);
-            handleUpdate(targetProp, grad);
-        };
-
         return (
             <div className="flex flex-col gap-4">
-                {/* Tab toggle */}
-                <div className="flex p-1 bg-slate-900/80 rounded-xl border border-white/5">
-                    {['solid', 'gradient'].map((mode) => (
-                        <button
-                            key={mode}
-                            onClick={() => setFillMode(mode)}
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${fillMode === mode
-                                ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
-                                : 'text-slate-400 hover:text-white'
-                                }`}
-                        >
-                            {mode === 'solid' ? '◼ Solid' : '◑ Gradient'}
-                        </button>
-                    ))}
-                </div>
-
-                {fillMode === 'solid' ? (
-                    <div className="flex flex-col gap-3">
-                        <div className="flex gap-2 pb-1 overflow-x-auto no-scrollbar">
-                            {PALETTE.map((hex) => (
-                                <button
-                                    key={hex}
-                                    onClick={() => handleUpdate(targetProp, hex)}
-                                    className={`w-8 h-8 rounded-full shrink-0 border-2 transition-all active:scale-90 ${currentFill === hex
-                                        ? 'border-orange-500 scale-110 shadow-lg shadow-orange-500/30'
-                                        : 'border-white/10 hover:border-white/30'
-                                        }`}
-                                    style={{ backgroundColor: hex }}
-                                />
-                            ))}
-                        </div>
-                        <div
-                            className="flex items-center gap-3 bg-slate-800/60 border border-white/10 rounded-xl px-3 py-2 cursor-pointer hover:border-orange-500/50 transition-all"
-                            onClick={() => solidInputRef.current?.click()}
-                        >
-                            <div className="w-7 h-7 rounded-lg border-2 border-white/20 shrink-0" style={{ backgroundColor: solidColor }} />
-                            <span className="text-sm text-slate-300 font-mono flex-1 uppercase tracking-widest">{solidColor}</span>
-                            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Custom</span>
-                            <input ref={solidInputRef} type="color" className="sr-only" value={solidColor} onChange={(e) => handleUpdate(targetProp, e.target.value)} />
-                        </div>
-                    </div>
-                ) : (
-                    <div className="flex flex-col gap-4">
-                        {/* Preset pills */}
-                        <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
-                            {GRADIENT_PRESETS.map((p) => (
-                                <button
-                                    key={p.name}
-                                    onClick={() => {
-                                        setFromColor(p.from); setToColor(p.to);
-                                        setGradAngle(p.angle); setGradType('linear');
-                                        applyGradient(p.from, p.to, p.angle, 'linear');
-                                    }}
-                                    className="shrink-0 flex flex-col items-center gap-1 group"
-                                >
-                                    <div
-                                        className="w-10 h-10 rounded-full border-2 border-white/10 group-hover:border-orange-400 transition-all shadow"
-                                        style={{ background: gradientToCSS(p.from, p.to, p.angle) }}
-                                    />
-                                    <span className="text-[9px] text-slate-500 group-hover:text-orange-400 transition-colors">{p.name}</span>
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* From / To pickers */}
-                        <div className="grid grid-cols-2 gap-2">
-                            {[
-                                { label: 'From', color: fromColor, ref: fromRef },
-                                { label: 'To', color: toColor, ref: toRef },
-                            ].map(({ label, color, ref }) => (
-                                <div
-                                    key={label}
-                                    className="flex items-center gap-2 bg-slate-800/60 border border-white/10 rounded-xl px-3 py-2.5 cursor-pointer hover:border-orange-500/40 transition-all"
-                                    onClick={() => ref.current?.click()}
-                                >
-                                    <div className="w-6 h-6 rounded-lg border border-white/20 shrink-0" style={{ backgroundColor: color }} />
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</span>
-                                        <span className="text-xs text-slate-300 font-mono uppercase">{color}</span>
-                                    </div>
-                                    <input
-                                        ref={ref} type="color" className="sr-only" value={color}
-                                        onChange={(e) => {
-                                            if (label === 'From') { setFromColor(e.target.value); applyGradient(e.target.value, toColor); }
-                                            else { setToColor(e.target.value); applyGradient(fromColor, e.target.value); }
-                                        }}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Live preview bar */}
-                        <div
-                            className="h-8 rounded-xl border border-white/10 shadow-inner"
-                            style={{ background: gradientToCSS(fromColor, toColor, gradAngle) }}
-                        />
-
-                        {/* Linear / Radial toggle */}
-                        <div className="flex gap-2">
-                            {['linear', 'radial'].map((t) => (
-                                <button
-                                    key={t}
-                                    onClick={() => { setGradType(t); applyGradient(fromColor, toColor, gradAngle, t); }}
-                                    className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all ${gradType === t
-                                        ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
-                                        : 'bg-slate-800/60 border-white/10 text-slate-500 hover:text-white'
-                                        }`}
-                                >
-                                    {t === 'linear' ? '↗ Linear' : '◎ Radial'}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Angle slider */}
-                        {gradType === 'linear' && (
-                            <div className="flex items-center gap-3">
-                                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 w-12 shrink-0">Angle</span>
-                                <input
-                                    type="range" min={0} max={360} step={5} value={gradAngle}
-                                    className="flex-1 accent-orange-500 h-1.5 cursor-pointer"
-                                    onChange={(e) => { const a = Number(e.target.value); setGradAngle(a); applyGradient(fromColor, toColor, a, gradType); }}
-                                />
-                                <span className="text-xs text-slate-300 w-9 text-right font-mono shrink-0">{gradAngle}°</span>
-                            </div>
-                        )}
-                    </div>
-                )}
+                <ScrubbablePalette
+                    currentFill={currentFill}
+                    onSelect={(hex) => handleUpdate(targetProp, hex)}
+                    PALETTE={PALETTE}
+                    object={object}
+                    fabricCanvas={fabricCanvas}
+                    targetProp={targetProp}
+                />
+                <CustomColorToggle
+                    value={currentFill}
+                    onChange={(val) => handleUpdate(targetProp, val)}
+                    object={object}
+                    fabricCanvas={fabricCanvas}
+                    label={targetProp}
+                />
             </div>
         );
     };
 
-    const renderFillPicker = (targetProp) => <GradientFillPicker targetProp={targetProp} />;
+    const renderFillPicker = (targetProp) => {
+        if (object.type === 'svg' && object.props.colorMap && Object.keys(object.props.colorMap).length > 0) {
+            return (
+                <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block border-b border-white/5 pb-2 mb-3">Graphic Colors</label>
+                    <div className="grid grid-cols-1 gap-2">
+                        {Object.entries(object.props.colorMap).map(([originalColor, currentColor], index) => (
+                            <GradientFillPicker
+                                key={originalColor}
+                                label={`Color Path ${index + 1}`}
+                                currentFill={currentColor}
+                                onChange={(val) => {
+                                    const newMap = { ...object.props.colorMap, [originalColor]: val };
+                                    handleUpdate('colorMap', newMap);
+                                }}
+                                object={object}
+                                fabricCanvas={fabricCanvas}
+                            />
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <GradientFillPicker
+                currentFill={getValue(targetProp)}
+                onChange={(val) => handleUpdate(targetProp, val)}
+                object={object}
+                fabricCanvas={fabricCanvas}
+            />
+        );
+    };
 
 
 
@@ -738,7 +980,20 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
             );
             break;
 
-        case 'text': title = "Edit Text"; content = <textarea value={getValue('text') || ""} onChange={(e) => handleUpdate('text', e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg p-3 text-white focus:border-orange-500 outline-none text-sm" rows={3} />; break;
+        case 'text': title = "Edit Text"; content = (
+            <textarea
+                value={getValue('text') || ""}
+                onChange={(e) => handleUpdate('text', e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                    }
+                }}
+                className="w-full bg-slate-900 border border-white/10 rounded-lg p-3 text-white focus:border-orange-500 outline-none text-sm"
+                rows={3}
+            />
+        ); break;
         case 'fontFamily': title = "Font"; content = (
             <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto pr-1">
                 {AVAILABLE_FONTS.map(font => (
@@ -814,7 +1069,12 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
     }
 
     return (
-        <div className="fixed bottom-[90px] left-3 right-3 z-50 bg-[#1e293b]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl shadow-black/50 overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-300">
+        <div
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="fixed bottom-[90px] left-3 right-3 z-50 bg-[#1e293b]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl shadow-black/50 overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-300"
+        >
+            <style>{PICKER_STYLES}</style>
             {/* Header */}
             <div className="flex justify-between items-center px-5 py-3 border-b border-white/5 bg-white/5">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{title}</span>
@@ -823,7 +1083,7 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
                 </button>
             </div>
             {/* Body */}
-            <div className="p-5 max-h-[50vh] overflow-y-auto custom-scrollbar">
+            <div className="p-5 max-h-[50vh] overflow-y-auto custom-scrollbar scroll-smooth">
                 {content}
             </div>
         </div>

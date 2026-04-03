@@ -1,6 +1,7 @@
 // src/design-tool/components/ContextualSidebar.jsx
 import React, { useState } from 'react';
 import ShapesSidebar from './ShapesSidebar';
+import GraphicsSidebar from './GraphicsSidebar';
 import SidebarSavedList from './SidebarSavedList';
 import { AiGeneratorModal } from './AiGeneratorModal';
 import addImageToCanvas from '../objectAdders/Image';
@@ -111,6 +112,10 @@ export default function ContextualSidebar({ activePanel, setActivePanel, addText
     case 'shapes':
       title = "Shapes";
       ContentComponent = () => <ShapesSidebar setActivePanel={setActivePanel} />;
+      break;
+    case 'graphics':
+      title = "Graphics";
+      ContentComponent = () => <GraphicsSidebar setActivePanel={setActivePanel} />;
       break;
     case 'layers':
       title = "Layers";

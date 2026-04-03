@@ -198,6 +198,7 @@ export default function MainToolbar({
                 </>
             )}
             <ToolButton icon={FiSquare} label="Shapes" isActive={activePanel === 'shapes'} onClick={() => onSelectTool('shapes')} />
+            <ToolButton icon={Sparkles} label="Graphics" isActive={activePanel === 'graphics'} onClick={() => onSelectTool('graphics')} />
             <ToolButton icon={Layout} label='Templates' isActive={activePanel === 'templates'} onClick={() => onSelectTool('templates')} />
             <ToolButton icon={FiCpu} label="AI" isActive={activePanel === 'ai'} onClick={() => onSelectTool('ai')} />
             <hr className="toolbar-divider" />

@@ -40,49 +40,69 @@ export default function MobileEditorLayout({
         };
     };
 
-    // ✅ NEW: HANDLE FIX (Mobile)
+    // ✅ FIXED: Robust Quality Enhancement (Upscale)
     const handleFixQuality = async (issue) => {
-        if (isFixing) return;
+        if (isFixing || !fabricCanvas) return;
         setIsFixing(issue.id);
+        
         if (onAiLoadingStart) onAiLoadingStart('Enhancing Image...', 'The Cosmic AI is upscaling and sharpening the details.');
 
         try {
-            // 1. Get the Blob (Temporary)
-            const tempBlobUrl = await processUpscale(issue.src);
+            // 🚀 1. Call Python backend for 4X Upscale
+            const upscaledBlobUrl = await processUpscale(issue.src);
 
-            if (tempBlobUrl && fabricCanvas) {
+            if (upscaledBlobUrl) {
                 const obj = fabricCanvas.getObjects().find(o => (o.customId || o.id) === issue.id);
                 if (obj) {
                     const imgElement = new Image();
-                    imgElement.src = tempBlobUrl;
+                    imgElement.crossOrigin = 'anonymous';
+                    imgElement.src = upscaledBlobUrl;
+                    
                     imgElement.onload = () => {
+                        // 2. SWAP ELEMENT: Replace the low-res pixels with high-res
                         obj.setElement(imgElement);
+
+                        // 3. SCALE PRESERVATION: We upscaled by 4X, so we must divide scale by 4 to keep same physical size
+                        const newScaleX = obj.scaleX / 4;
+                        const newScaleY = obj.scaleY / 4;
+
                         obj.set({
-                            scaleX: obj.scaleX / 4,
-                            scaleY: obj.scaleY / 4,
+                            scaleX: newScaleX,
+                            scaleY: newScaleY,
                             originalWidth: imgElement.width,
                             originalHeight: imgElement.height,
-                            proxy_src: tempBlobUrl,
-                            print_src: tempBlobUrl,
+                            proxy_src: upscaledBlobUrl,
+                            print_src: upscaledBlobUrl,
                         });
+
                         obj.setCoords();
                         fabricCanvas.requestRenderAll();
                         fabricCanvas.fire('object:modified', { target: obj });
 
+                        // 4. SYNC TO REDUX: Ensure the print-ready version is saved
                         updateObject(issue.id, {
-                            proxy_src: tempBlobUrl,
-                            print_src: tempBlobUrl,
+                            props: {
+                                ...obj.toObject(),
+                                scaleX: newScaleX,
+                                scaleY: newScaleY,
+                            },
+                            proxy_src: upscaledBlobUrl,
+                            print_src: upscaledBlobUrl,
                             originalWidth: imgElement.width,
                             originalHeight: imgElement.height,
-                            src: tempBlobUrl
+                            src: upscaledBlobUrl
                         });
+                        
+                        setIsFixing(null);
+                        if (onAiLoadingEnd) onAiLoadingEnd();
                     };
                 }
+            } else {
+                setIsFixing(null);
+                if (onAiLoadingEnd) onAiLoadingEnd();
             }
         } catch (error) {
-            console.error("Fix failed:", error);
-            toast.error("Failed to save enhanced image")
-        } finally {
+            console.error("Quality Fix failed:", error);
             setIsFixing(null);
             if (onAiLoadingEnd) onAiLoadingEnd();
         }
@@ -92,9 +112,9 @@ export default function MobileEditorLayout({
     const hasImages = dpiIssues.length > 0;
 
     return (
-        <div className="flex flex-col h-full w-full bg-[#0f172a] relative overflow-hidden">
+        <div className="flex flex-col h-[100dvh] w-full bg-[#0f172a] relative overflow-x-hidden overflow-y-auto overscroll-none">
             {/* 1. TOP HEADER */}
-            <div className="absolute top-0 left-0 w-full z-30 px-4 py-3 flex justify-between items-center bg-gradient-to-b from-[#0f172a]/90 to-transparent pointer-events-none">
+            <div className="fixed top-0 left-0 w-full z-30 px-4 py-3 flex justify-between items-center bg-gradient-to-b from-[#0f172a]/95 to-transparent pointer-events-none">
                 <div className="flex gap-2 pointer-events-auto">
                     <button onClick={() => navigation('/dashboard')} className="w-9 h-9 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white border border-white/5"><ArrowLeft size={18} /></button>
                 </div>
@@ -145,7 +165,7 @@ export default function MobileEditorLayout({
                     border border-white/10 backdrop-blur-md
                     ${hasCritical ? 'w-14 h-14 bg-red-600 text-white animate-bounce' : 'w-12 h-12 bg-slate-800/90 text-slate-200'}
                 `}
-                        style={{ bottom: '110px' }}
+                        style={{ bottom: '170px' }}
                     >
                         <Bell size={20} />
                         {hasCritical && <span className="absolute top-0 right-0 w-3 h-3 rounded-full bg-red-400 border-2 border-slate-900 animate-ping" />}
@@ -153,43 +173,50 @@ export default function MobileEditorLayout({
                     </button>
 
                     {showDpiList && (
-                        <div className="absolute right-4 z-50 w-72 bg-slate-900/95 border border-white/10 backdrop-blur-xl rounded-2xl shadow-2xl animate-in slide-in-from-right-5 fade-in duration-200 flex flex-col max-h-[40vh]" style={{ bottom: '170px' }}>
-                            <div className="p-3 border-b border-white/10 flex justify-between items-center">
-                                <h4 className="text-xs font-bold text-white uppercase">Image Quality</h4>
-                                <button onClick={() => setShowDpiList(false)}><X size={16} className="text-slate-400" /></button>
-                            </div>
+                        <>
+                            {/* 🌌 Backdrop for closing on click-away */}
+                            <div 
+                                className="fixed inset-0 z-40 bg-black/5 animate-in fade-in duration-300" 
+                                onClick={() => setShowDpiList(false)} 
+                            />
+                            
+                            <div className="fixed right-4 z-50 w-72 bg-slate-900/95 border border-white/10 backdrop-blur-xl rounded-2xl shadow-2xl animate-in slide-in-from-right-5 fade-in duration-200 flex flex-col max-h-[50vh]" style={{ bottom: '230px' }}>
+                                <div className="p-3 border-b border-white/10 flex justify-between items-center">
+                                    <h4 className="text-xs font-bold text-white uppercase">Image Quality</h4>
+                                    <button onClick={() => setShowDpiList(false)}><X size={16} className="text-slate-400" /></button>
+                                </div>
 
-                            <div className="overflow-y-auto p-2 space-y-2 custom-scrollbar">
-                                {dpiIssues.map((issue) => (
-                                    <div key={issue.id} className="flex gap-3 p-2 rounded-lg bg-white/5 border border-white/5 items-center">
-                                        <div className="w-10 h-10 rounded bg-white/10 overflow-hidden shrink-0">
-                                            <img src={issue.src} className="w-full h-full object-contain" alt="" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-1.5">
-                                                {issue.status === 'poor' ? <AlertTriangle size={12} className="text-red-500" /> : <CheckCircle size={12} className="text-green-500" />}
-                                                <span className={`text-xs font-bold ${issue.status === 'poor' ? 'text-red-400' : 'text-green-400'}`}>
-                                                    {issue.message}
-                                                </span>
+                                <div className="overflow-y-auto p-2 space-y-2 custom-scrollbar">
+                                    {dpiIssues.map((issue) => (
+                                        <div key={issue.id} className="flex gap-3 p-2 rounded-lg bg-white/5 border border-white/5 items-center">
+                                            <div className="w-10 h-10 rounded bg-white/10 overflow-hidden shrink-0">
+                                                <img src={issue.src} className="w-full h-full object-contain" alt="" />
                                             </div>
-                                            <p className="text-[10px] text-slate-400">{issue.dpi} DPI</p>
-                                        </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-1.5">
+                                                    {issue.status === 'poor' ? <AlertTriangle size={12} className="text-red-500" /> : <CheckCircle size={12} className="text-green-500" />}
+                                                    <span className={`text-xs font-bold ${issue.status === 'poor' ? 'text-red-400' : 'text-green-400'}`}>
+                                                        {issue.message}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400">{issue.dpi} DPI</p>
+                                            </div>
 
-                                        {/* ✅ FIX BUTTON (Mobile) */}
-                                        {issue.status === 'poor' && (
-                                            <button
-                                                onClick={() => handleFixQuality(issue)}
-                                                disabled={!!isFixing}
-                                                className="px-2 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold flex items-center gap-1"
-                                            >
-                                                {isFixing === issue.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} color="white" strokeWidth={1.5} />}
-                                                {isFixing === issue.id ? "..." : "Enhance"}
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
+                                            {issue.status === 'poor' && (
+                                                <button
+                                                    onClick={() => handleFixQuality(issue)}
+                                                    disabled={!!isFixing}
+                                                    className="px-2 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold flex items-center gap-1"
+                                                >
+                                                    {isFixing === issue.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} color="white" strokeWidth={1.5} />}
+                                                    {isFixing === issue.id ? "..." : "Enhance"}
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        </>
                     )}
                 </>
             )}

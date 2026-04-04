@@ -268,6 +268,7 @@ const ScrubbableInput = ({ label, value, min, max, step = 1, onChange, onCommit,
   );
 };
 
+
 const FontPicker = ({ currentFont, onSelect }) => {
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef(null);
@@ -324,22 +325,22 @@ function liveUpdateFabric(fabricCanvas, id, updates, currentLiveProps, object) {
   if (finalUpdates.stroke) finalUpdates.stroke = resolveFillForFabric(finalUpdates.stroke);
 
   const type = object.type;
-  
+
   if (updates.colorMap && type === 'svg') {
-     const newColorMap = updates.colorMap;
-     if (existing._objects) {
-         existing._objects.forEach(path => {
-             if (path.originalFill && newColorMap[path.originalFill]) {
-                 path.set('fill', resolveFillForFabric(newColorMap[path.originalFill]));
-             }
-             if (path.originalStroke && newColorMap[path.originalStroke]) {
-                 path.set('stroke', resolveFillForFabric(newColorMap[path.originalStroke]));
-             }
-         });
-     }
-     existing.set('colorMap', newColorMap); // Sync Fabric object
-     fabricCanvas.requestRenderAll();
-     return;
+    const newColorMap = updates.colorMap;
+    if (existing._objects) {
+      existing._objects.forEach(path => {
+        if (path.originalFill && newColorMap[path.originalFill]) {
+          path.set('fill', resolveFillForFabric(newColorMap[path.originalFill]));
+        }
+        if (path.originalStroke && newColorMap[path.originalStroke]) {
+          path.set('stroke', resolveFillForFabric(newColorMap[path.originalStroke]));
+        }
+      });
+    }
+    existing.set('colorMap', newColorMap); // Sync Fabric object
+    fabricCanvas.requestRenderAll();
+    return;
   }
 
   const shapeTypes = ['star', 'pentagon', 'hexagon', 'triangle', 'arrow', 'diamond', 'trapezoid', 'lightning'];
@@ -450,12 +451,12 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
             print_src: imgElement.src,
           });
           fabricCanvas.requestRenderAll();
-          updateObject(id, { 
-            src: newImageUrl, 
-            proxy_src: imgElement.src, 
-            print_src: imgElement.src, 
-            originalWidth: imgElement.width, 
-            originalHeight: imgElement.height 
+          updateObject(id, {
+            src: newImageUrl,
+            proxy_src: imgElement.src,
+            print_src: imgElement.src,
+            originalWidth: imgElement.width,
+            originalHeight: imgElement.height
           });
         }
       }
@@ -466,32 +467,46 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
     }
   }
 
-  // ✅ AUTO DPI FIX
-  const handleAutoDpi = async () => {
+  // ✅ FIXED: Auto-Scale for Print (300 DPI) - Desktop
+  const handleAutoDpi = () => {
     if (!object || !fabricCanvas || type !== 'image') return;
 
-    // Use current canvas dimensions as proxy for Print Area (High Res Workflow)
+    // 1. Identify issues
     const dpiInfo = calculateImageDPI(
       fabricCanvas.getObjects().find(o => o.customId === id),
-      fabricCanvas.width,
-      fabricCanvas.height,
+      fabricCanvas.width / fabricCanvas.getZoom(),
+      fabricCanvas.height / fabricCanvas.getZoom(),
       printDimensions.w || 4500,
       printDimensions.h || 5400
     );
 
     if (dpiInfo && dpiInfo.dpi < 300) {
-      // Calculate target scale to reach 300 DPI
-      // NewScale = CurrentScale * (CurrentDPI / 300)
+      const currentScaleX = liveProps.scaleX || 1;
+      const currentScaleY = liveProps.scaleY || 1;
+
       const correctionFactor = dpiInfo.dpi / 300;
-      const newScaleX = scaleX * correctionFactor;
-      const newScaleY = scaleY * correctionFactor;
-      // Update State & Canvas
+      const newScaleX = currentScaleX * correctionFactor;
+      const newScaleY = currentScaleY * correctionFactor;
+
+      // 2. APPLY TO FABRIC (LIVE)
+      const fabricObj = fabricCanvas.getObjects().find(o => o.customId === id);
+      if (fabricObj) {
+        fabricObj.set({ scaleX: newScaleX, scaleY: newScaleY });
+        fabricObj.setCoords();
+        fabricCanvas.requestRenderAll();
+        fabricCanvas.fire('object:modified', { target: fabricObj });
+      }
+
+      // 3. COMMIT TO REDUX & STATE
       setScaleX(newScaleX);
       setScaleY(newScaleY);
-      await handleUpdateAndHistory('scaleX', newScaleX);
-      await handleUpdateAndHistory('scaleY', newScaleY);
+      handleUpdateAndHistory('scaleX', newScaleX);
+      handleUpdateAndHistory('scaleY', newScaleY);
 
-      updateDpiForObject(fabricCanvas.getObjects().find(o => o.customId === object.id))
+      // Update local state if provided by Editor.jsx
+      if (updateDpiForObject && fabricObj) {
+        updateDpiForObject(fabricObj);
+      }
     }
   };
 

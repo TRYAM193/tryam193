@@ -56,14 +56,39 @@ export default function CanvasEditor({
   const isSyncingRef = useRef(false);
   const pendingImagesRef = useRef(new Set());
 
-  // 🛑 1. THE NEW DELTA TRACKER: Holds the "Before" state when an object is clicked
-  const beforeStateRef = useRef(null);
-
   const [initialized, setInitialized] = useState(false);
   const wrapperRef = useRef(null);
   const canvasObjects = useSelector((state) => state.canvas.present);
   const previousStatesRef = useRef(new Map());
   const dispatch = useDispatch();
+
+  // 🎨 --- THEME CUSTOMIZATION: Premium Dark Slate Theme ---
+  const THEME_COLOR = '#1e293b';
+  const BORDER_WEIGHT = 2; // Sharp hairline border
+
+  // Helper to inject modern styles into ANY object
+  const applyModernControls = (obj, scale = 1) => {
+    if (!obj) return;
+
+    // 📱 Pin-point handle balance: 8px on mobile, 10px on desktop
+    const visualSize = isMobile ? 8 : 10;
+    const hitSize = 40;
+
+    obj.set({
+      borderColor: THEME_COLOR,
+      borderDashArray: null,
+      cornerColor: '#ffffff',
+      cornerStrokeColor: THEME_COLOR,
+      cornerStyle: 'circle',
+      cornerSize: visualSize / scale,
+      touchCornerSize: hitSize / scale,
+      borderScaleFactor: BORDER_WEIGHT / scale,
+      transparentCorners: false,
+      hasRotatingPoint: false,
+      lockUniScaling: true
+    });
+    obj.setCoords();
+  };
 
   const [menuPosition, setMenuPosition] = useState(null);
   const [selectedObjectLocked, setSelectedObjectLocked] = useState(false);
@@ -170,13 +195,9 @@ export default function CanvasEditor({
     canvas.setDimensions({ width: targetW * scale, height: targetH * scale });
     canvas.setZoom(scale);
 
-    const controlSize = isMobile ? 24 : 12;
-    fabric.Object.prototype.set({
-      cornerSize: controlSize / scale,
-      touchCornerSize: 40 / scale,
-      transparentCorners: false,
-      borderScaleFactor: 2 / scale,
-    });
+    // Force update all existing objects with the correct scale
+    canvas.getObjects().forEach(o => applyModernControls(o, scale));
+
     canvas.requestRenderAll();
   };
 
@@ -388,6 +409,7 @@ export default function CanvasEditor({
       setSelectedId(null);
       setActiveTool(null);
       setMenuPosition(null);
+      setSelectedObjectUUIDs([]); // 🛠️ FIX: Clear selection IDs on deselect
     };
 
     const handleMoving = () => {
@@ -525,19 +547,48 @@ export default function CanvasEditor({
       if (target && (target.type === 'i-text' || target.type === 'text' || target.type === 'textbox' || target.customType === 'text')) {
         // Force exit any on-canvas editing that might have triggered
         if (target.isEditing) target.exitEditing();
-        
+
         // Delay slightly to allow the UI to switch to the correct property panel/sidebar first
         setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('focus-sidebar-text', { 
-            detail: { id: target.customId } 
+          window.dispatchEvent(new CustomEvent('focus-sidebar-text', {
+            detail: { id: target.customId }
           }));
         }, 100);
       }
     });
 
-    canvas.on('selection:created', handleSelection);
-    canvas.on('selection:updated', handleSelection);
-    canvas.on('selection:cleared', handleCleared);
+    // --- 🛡️ SELECTION STYLE WATCHDOG: Ensures new/duplicated objects follow theme ---
+    canvas.on('object:added', (e) => {
+      const obj = e.target;
+      if (obj && !obj._modernized) {
+        applyModernControls(obj, canvas.getZoom());
+        obj._modernized = true; // Prevent infinite loops if necessary
+      }
+    });
+
+    canvas.on('selection:created', (e) => {
+      const activeObj = canvas.getActiveObject();
+      if (activeObj) {
+        // Apply modern styles to the active selection or single object
+        applyModernControls(activeObj, canvas.getZoom());
+
+        // Also ensure individual objects inside the selection are styled if needed
+        if (activeObj.type === 'activeselection' || activeObj.type === 'activeSelection') {
+          activeObj.getObjects().forEach(o => applyModernControls(o, canvas.getZoom()));
+        }
+      }
+      handleSelection(e);
+    });
+
+    canvas.on('selection:updated', (e) => {
+      const activeObj = canvas.getActiveObject();
+      if (activeObj) {
+        applyModernControls(activeObj, canvas.getZoom());
+      }
+      handleSelection(e);
+    });
+
+    canvas.on('selection:cleared', handleCleared); // 🛠️ RESTORED: This was missing!
     canvas.on('object:moving', handleMoving);
     canvas.on('object:scaling', handleMoving);
     canvas.on('object:rotating', handleMoving);
@@ -645,7 +696,7 @@ export default function CanvasEditor({
             try {
               const { objects, options } = await fabric.loadSVGFromString(objData.svgString);
               const svgGroup = fabric.util.groupSVGElements(objects, options);
-              
+
               let colorMap = objData.props.colorMap;
               if (!colorMap && objects) {
                 colorMap = {};
@@ -659,7 +710,7 @@ export default function CanvasEditor({
                   }
                 });
                 [...uniqueFills].slice(0, 5).forEach(c => colorMap[c] = c);
-                
+
                 // Dispatch colorMap to Redux
                 setTimeout(() => {
                   dispatch(dispatchDelta({
@@ -672,7 +723,7 @@ export default function CanvasEditor({
 
               const resolvedStroke = resolveFillForFabric(objData.props.stroke);
               svgGroup.set({ ...objData.props, customId: objData.id, customType: 'svg', stroke: resolvedStroke });
-              
+
               if (svgGroup._objects) {
                 svgGroup._objects.forEach(path => {
                   path.originalFill = path.fill; // Store to allow dynamic mapping
@@ -696,19 +747,19 @@ export default function CanvasEditor({
             const resolvedProps = { ...objData.props };
             if (resolvedProps.stroke) resolvedProps.stroke = resolveFillForFabric(resolvedProps.stroke);
             existing.set(resolvedProps);
-            
+
             const colorMap = objData.props.colorMap;
             if (colorMap && existing._objects) {
-               existing._objects.forEach(path => {
-                   if (path.originalFill && colorMap[path.originalFill]) {
-                       path.set('fill', resolveFillForFabric(colorMap[path.originalFill]));
-                   }
-                   if (path.originalStroke && colorMap[path.originalStroke]) {
-                       path.set('stroke', resolveFillForFabric(colorMap[path.originalStroke]));
-                   }
-               });
+              existing._objects.forEach(path => {
+                if (path.originalFill && colorMap[path.originalFill]) {
+                  path.set('fill', resolveFillForFabric(colorMap[path.originalFill]));
+                }
+                if (path.originalStroke && colorMap[path.originalStroke]) {
+                  path.set('stroke', resolveFillForFabric(colorMap[path.originalStroke]));
+                }
+              });
             } else if (resolvedProps.fill && existing._objects) {
-               existing._objects.forEach(path => path.set('fill', resolveFillForFabric(resolvedProps.fill)));
+              existing._objects.forEach(path => path.set('fill', resolveFillForFabric(resolvedProps.fill)));
             }
             existing.setCoords();
           }

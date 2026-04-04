@@ -4,16 +4,17 @@ import ShapesSidebar from './ShapesSidebar';
 import GraphicsSidebar from './GraphicsSidebar';
 import SidebarSavedList from './SidebarSavedList';
 import { AiGeneratorModal } from './AiGeneratorModal';
-import addImageToCanvas from '../objectAdders/Image';
-import { FiCpu, FiType, FiUploadCloud, FiAlertTriangle, FiCheckCircle, FiX} from 'react-icons/fi';
+import { FiCpu, FiType, FiUploadCloud, FiX } from 'react-icons/fi';
 import LayersPanel from './LayersPanel';
 import SidebarTemplateList from './SidebarTemplateList';
 
-export default function ContextualSidebar({ activePanel, setActivePanel, addText, addHeading, addSubheading, productId, handleLoadSavedDesign, fabricCanvas, setSelectedId, setActiveTool, selectedId= null, onMergeDesign, userId, onMergeTemplate, 
-  onReplaceTemplate, onAiObjectsGenerated, onAiGenerateStart, onAiGenerateEnd}) {
-
-  let ContentComponent = null;
-  let title = "";
+export default function ContextualSidebar({ 
+  activePanel, setActivePanel, addText, addHeading, addSubheading, 
+  productId, handleLoadSavedDesign, fabricCanvas, setSelectedId, 
+  setActiveTool, selectedId = null, onMergeDesign, userId, 
+  onMergeTemplate, onReplaceTemplate, onAiObjectsGenerated, 
+  onAiGenerateStart, onAiGenerateEnd 
+}) {
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
@@ -23,10 +24,13 @@ export default function ContextualSidebar({ activePanel, setActivePanel, addText
     }
   };
 
+  let content = null;
+  let title = "";
+
   switch (activePanel) {
     case 'saved':
       title = "Your Saved Designs";
-      ContentComponent = () => (
+      content = (
         <SidebarSavedList
           productId={productId}
           onLoadDesign={handleLoadSavedDesign}
@@ -37,13 +41,10 @@ export default function ContextualSidebar({ activePanel, setActivePanel, addText
       break;
     case 'text':
       title = "Text Styles";
-      ContentComponent = () => (
+      content = (
         <div className="sidebar-content space-y-4">
           <button
-            onClick={() => {
-              addText()
-              setActivePanel(null)
-            }}
+            onClick={() => { addText(); setActivePanel(null); }}
             className="w-full py-3 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold shadow-lg shadow-orange-900/20 transition-all flex items-center justify-center gap-2"
           >
             <FiType /> Add Text Box
@@ -53,19 +54,13 @@ export default function ContextualSidebar({ activePanel, setActivePanel, addText
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Presets</h3>
             <div
               className='p-4 border border-white/10 rounded-lg cursor-pointer hover:bg-white/5 hover:border-orange-500/50 transition-all bg-slate-800/40'
-              onClick={() => {
-                addHeading()
-                setActivePanel(null)
-              }}
+              onClick={() => { addHeading(); setActivePanel(null); }}
             >
               <h1 className="text-2xl font-bold text-white text-center">Add Heading</h1>
             </div>
             <div
               className='p-3 border border-white/10 rounded-lg cursor-pointer hover:bg-white/5 hover:border-orange-500/50 transition-all bg-slate-800/40'
-              onClick={() => {
-                addSubheading()
-                setActivePanel(null)
-              }}
+              onClick={() => { addSubheading(); setActivePanel(null); }}
             >
               <h3 className="text-lg font-medium text-slate-300 text-center">Add Subheading</h3>
             </div>
@@ -75,7 +70,7 @@ export default function ContextualSidebar({ activePanel, setActivePanel, addText
       break;
     case 'image':
       title = "Images";
-      ContentComponent = () => (
+      content = (
         <div className="sidebar-content text-center py-8">
           <div className="w-16 h-16 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/10">
             <FiUploadCloud size={24} className="text-slate-400" />
@@ -89,7 +84,7 @@ export default function ContextualSidebar({ activePanel, setActivePanel, addText
       break;
     case 'ai':
       title = "AI Generator";
-      ContentComponent = () => (
+      content = (
         <div className="sidebar-content">
           <div className="p-5 bg-gradient-to-b from-slate-800/50 to-slate-900/50 border border-orange-500/20 rounded-xl text-center shadow-lg">
             <div className="w-12 h-12 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -97,7 +92,7 @@ export default function ContextualSidebar({ activePanel, setActivePanel, addText
             </div>
             <h3 className="text-sm font-bold text-white mb-2">Create with AI</h3>
             <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-              Describe your vision and let our cosmic AI generate unique artwork for your merch.
+              Describe your vision and let our cosmic AI generate unique artwork.
             </p>
             <button
               onClick={() => setIsAiModalOpen(true)}
@@ -111,47 +106,39 @@ export default function ContextualSidebar({ activePanel, setActivePanel, addText
       break;
     case 'shapes':
       title = "Shapes";
-      ContentComponent = () => <ShapesSidebar setActivePanel={setActivePanel} />;
+      content = <ShapesSidebar setActivePanel={setActivePanel} />;
       break;
     case 'graphics':
       title = "Graphics";
-      ContentComponent = () => <GraphicsSidebar setActivePanel={setActivePanel} />;
+      content = <GraphicsSidebar setActivePanel={setActivePanel} />;
       break;
     case 'layers':
       title = "Layers";
-      ContentComponent = () => <LayersPanel fabricCanvas={fabricCanvas} setSelectedId={setSelectedId} selectedId={selectedId}/>;
+      content = <LayersPanel fabricCanvas={fabricCanvas} setSelectedId={setSelectedId} selectedId={selectedId} />;
       break;
     case 'templates':
-      title = "Global Templates";
-      ContentComponent = () => (
-        <SidebarTemplateList 
-          onMerge={onMergeTemplate}
-          onReplace={onReplaceTemplate}
-        />
-      );
+      title = "Templates";
+      content = <SidebarTemplateList onMerge={onMergeTemplate} onReplace={onReplaceTemplate} />;
       break;
     default:
-      ContentComponent = null;
+      content = null;
       title = "";
   }
 
-  const FinalContent = ContentComponent ? <ContentComponent onClose={() => setActivePanel(null)} /> : null;
-
   return (
-    <aside className="contextual-sidebar flex flex-col h-full">
-      <div className="sidebar-header shrink-0">
-        <h2 className="text-sm font-bold text-white uppercase tracking-wide">{title}</h2>
+    <aside className="contextual-sidebar flex flex-col h-full bg-slate-900/90 border-r border-white/5">
+      <div className="sidebar-header shrink-0 p-4 flex items-center justify-between border-b border-white/5">
+        <h2 className="text-sm font-bold text-white uppercase tracking-widest">{title}</h2>
         <button
           onClick={() => setActivePanel(null)}
           className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-          title="Close Sidebar"
         >
           <FiX size={16} />
         </button>
       </div>
 
-      <div className="flex-grow overflow-y-auto custom-scrollbar overscroll-none">
-        {FinalContent}
+      <div className="flex-grow overflow-y-auto custom-scrollbar p-1">
+        {content}
       </div>
 
       <AiGeneratorModal
@@ -161,9 +148,9 @@ export default function ContextualSidebar({ activePanel, setActivePanel, addText
         fabricCanvas={fabricCanvas}
         productId={productId}
         onGenerateStart={() => {
-           setIsAiModalOpen(false);
-           setActivePanel(null);
-           if (onAiGenerateStart) onAiGenerateStart();
+          setIsAiModalOpen(false);
+          setActivePanel(null);
+          if (onAiGenerateStart) onAiGenerateStart();
         }}
         onGenerateEnd={onAiGenerateEnd}
       />

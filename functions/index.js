@@ -4,9 +4,7 @@ const admin = require("firebase-admin");
 const axios = require("axios");
 const path = require("path");
 const fs = require("fs");
-const { registerFont } = require("canvas");
 const Razorpay = require("razorpay");
-const Stripe = require("stripe");
 const { v4: uuidv4 } = require('uuid');
 const { getDownloadURL } = require("firebase-admin/storage")
 const handlebars = require("handlebars");
@@ -1139,111 +1137,6 @@ async function sendToQikink(orderData, processedItems) {
 }
 
 // ------------------------------------------------------------------
-// 📡 4. WEBHOOK HANDLER (THE LISTENER)
-// ------------------------------------------------------------------
-exports.handleProviderWebhook = functions.https.onRequest(async (req, res) => {
-  const source = req.query.source;
-  const body = req.body;
-
-  console.log(`🔔 Webhook received from ${source} [${body.type || body.event}]`);
-
-  try {
-    // 🛡️ 1. SAFETY: Handle Printify "Ping"
-    if (body.type === 'ping' || (source === 'printify' && !body.resource)) {
-      console.log("✅ Printify Ping received. Responding 200.");
-      return res.status(200).send("Pong");
-    }
-
-    let firestoreOrderRef = null;
-    let newStatus = "";
-    let trackingData = {};
-
-    // ------------------------------------------------------
-    // A. HANDLE PRINTIFY EVENTS
-    // ------------------------------------------------------
-    if (source === 'printify') {
-      const eventType = body.type;
-      const printifyOrderId = body.resource.id;
-
-      // Find Order via Provider ID
-      const snapshot = await db.collection('orders')
-        .where('providerOrderId', '==', printifyOrderId)
-        .limit(1)
-        .get();
-
-      if (snapshot.empty) {
-        console.warn(`⚠️ No order found with providerOrderId: ${printifyOrderId}`);
-        return res.status(200).send("Order not found, skipping");
-      }
-
-      firestoreOrderRef = snapshot.docs[0].ref;
-
-      if (eventType === 'order:sent-to-production') {
-        newStatus = 'production';
-      } else if (eventType === 'order:shipment:created') {
-        newStatus = 'shipped';
-        const carrier = body.resource.data?.carrier;
-        trackingData = {
-          trackingCode: carrier?.tracking_number,
-          trackingUrl: carrier?.tracking_url,
-          carrierName: carrier?.code
-        };
-      } else if (eventType === 'order:shipment:delivered') {
-        newStatus = 'delivered';
-        const data = body.resource.data;
-        trackingData = { deliveredAt: data?.delivered_at || new Date().toISOString() };
-      }
-    }
-
-    // ------------------------------------------------------
-    // B. HANDLE GELATO EVENTS
-    // ------------------------------------------------------
-    else if (source === 'gelato') {
-      if (body.event === 'shipment_dispatched') {
-        const gelatoId = body.orderReferenceId;
-        firestoreOrderRef = db.collection('orders').doc(gelatoId);
-        newStatus = 'shipped';
-        trackingData = {
-          trackingCode: body.fulfillmentPackage?.trackingCode,
-          trackingUrl: body.fulfillmentPackage?.trackingUrl
-        };
-      }
-      // Note: Add Gelato 'delivered' event check here if they provide one
-    }
-
-    // ------------------------------------------------------
-    // C. UPDATE DATABASE & HANDLE COD INVOICE
-    // ------------------------------------------------------
-    if (firestoreOrderRef && newStatus) {
-      console.log(`📝 Updating Order to '${newStatus}'`);
-
-      const docSnap = await firestoreOrderRef.get();
-      const orderData = docSnap.data();
-
-      // 1. Prepare Updates
-      const updates = { status: newStatus };
-      if (trackingData.trackingCode) {
-        updates['providerData.trackingCode'] = trackingData.trackingCode;
-        updates['providerData.trackingUrl'] = trackingData.trackingUrl;
-        updates['providerData.carrier'] = trackingData.carrierName;
-      }
-      if (trackingData.deliveredAt) {
-        updates['deliveredAt'] = trackingData.deliveredAt;
-      }
-
-      await firestoreOrderRef.update(updates);
-    }
-
-    res.status(200).send("Webhook Processed");
-
-  } catch (error) {
-    console.error("Webhook Error:", error);
-    res.status(200).send("Error logged");
-  }
-});
-
-
-// ------------------------------------------------------------------
 // 🔄 5. REFRESH STATUS (For Qikink / Backup)
 // ------------------------------------------------------------------
 exports.refreshOrderStatus = functions
@@ -1396,71 +1289,6 @@ const PRODUCT_DIMENSIONS = {
     canvas: { w: 380, h: 360 },
     print: { front: { w: 3000, h: 3600 } }
   }
-};
-
-const FONTS = {
-  "Roboto": { bold: true, italic: true },
-  "Open Sans": { bold: true, italic: true },
-  "Montserrat": { bold: true, italic: true },
-  "Lato": { bold: true, italic: true },
-  "Poppins": { bold: true, italic: true },
-  "Oswald": { bold: true, italic: false }, // Variable weight, usually no italic in standard set
-  "Raleway": { bold: true, italic: true },
-  "Playfair Display": { bold: true, italic: true },
-  "Merriweather": { bold: true, italic: true },
-  "Roboto Slab": { bold: true, italic: false },
-  "Lora": { bold: true, italic: true },
-  "Abril Fatface": { bold: false, italic: false },
-  "Arvo": { bold: true, italic: false },
-  "Dancing Script": { bold: true, italic: false }, // Bold works for headers
-  "Pacifico": { bold: false, italic: false },
-  "Great Vibes": { bold: false, italic: false },
-  "Satisfy": { bold: false, italic: false },
-  "Yellowtail": { bold: false, italic: false },
-  "Caveat": { bold: true, italic: false },
-  "Shadows Into Light": { bold: false, italic: false },
-  "Indie Flower": { bold: false, italic: false },
-  "Permanent Marker": { bold: false, italic: false },
-  "Bangers": { bold: false, italic: false },
-  "Anton": { bold: false, italic: false },
-  "Lobster": { bold: false, italic: false },
-  "Righteous": { bold: false, italic: false },
-  "Fredoka": { bold: true, italic: false },
-  "Chewy": { bold: false, italic: false },
-  "Amatic SC": { bold: true, italic: false },
-  "Bebas Neue": { bold: false, italic: false },
-  "Reggae One": { bold: false, italic: false }
-}
-
-
-const loadFonts = () => {
-  const fontsDir = path.join(__dirname, "fonts");
-
-  Object.entries(FONTS).forEach(([family, config]) => {
-    // A. Always register Regular
-    const regularPath = path.join(fontsDir, family, `${family}-Regular.ttf`);
-    registerFont(regularPath, { family: family });
-
-    // B. Register Bold if enabled
-    if (config.bold) {
-      const boldPath = path.join(fontsDir, family, `${family}-Bold.ttf`);
-      registerFont(boldPath, { family: family, weight: "bold" });
-    }
-
-    // C. Register Italic if enabled
-    if (config.italic) {
-      const italicPath = path.join(fontsDir, family, `${family}-Italic.ttf`);
-      registerFont(italicPath, { family: family, style: "italic" });
-    }
-
-    // D. Register BoldItalic if BOTH are enabled
-    if (config.bold && config.italic) {
-      const boldItalicPath = path.join(fontsDir, family, `${family}-BoldItalic.ttf`);
-      registerFont(boldItalicPath, { family: family, weight: "bold", style: "italic" });
-    }
-  });
-
-  console.log("✅ All fonts registered successfully!");
 };
 
 // ------------------------------------------------------------------
@@ -1700,7 +1528,6 @@ exports.processNewOrder = functions
 
     console.log(`🤖 Processing Order ${orderId}... (Admin Approved: ${isAdminApproved})`);
     await change.after.ref.update({ providerStatus: 'processing' });
-    loadFonts();
 
     try {
       const item = newData;
@@ -1849,28 +1676,6 @@ exports.createRazorpayOrder = functions
     } catch (error) { throw new functions.https.HttpsError('internal', error.message); }
   });
 
-exports.createStripeIntent = functions
-  .runWith({ secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
-  .https.onCall(async (data, context) => {
-    let finalAmount = data.amount;
-    const stripe = new Stripe(config.value().stripe?.secret_key || "MISSING_KEY");
-
-    // 🛡️ SECURITY: Verify discount eligibility in DB
-    if (data.applyReferralReward) {
-      const userDoc = await db.collection('users').doc(context.auth.uid).get();
-      if (userDoc.exists && userDoc.data().hasActiveReward) {
-        finalAmount = Math.max(0, finalAmount - 100);
-      }
-    }
-
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(finalAmount * 100),
-      currency: data.currency,
-      metadata: { groupId: data.groupId }
-    });
-    return { clientSecret: paymentIntent.client_secret };
-  });
-
 exports.generateFabricJson = functions
   .runWith({
     timeoutSeconds: 300,
@@ -1964,7 +1769,7 @@ Ensure the design looks good on a t-shirt.`;
       }
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.5-flash-lite',
         contents: finalContents,
         config: {
           systemInstruction: systemInstruction,
@@ -1981,22 +1786,6 @@ Ensure the design looks good on a t-shirt.`;
       throw new functions.https.HttpsError('internal', 'Design generation failed');
     }
   });
-
-exports.saveTshirtDesign = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Login required.');
-
-  try {
-    const designRef = await db.collection("designs").add({
-      userId: context.auth.uid,
-      tshirtColor: data.tshirtColor || "white",
-      canvasJson: JSON.stringify(data.canvasJson),
-      previewImage: data.previewImage,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      status: "saved"
-    });
-    return { success: true, designId: designRef.id };
-  } catch (error) { throw new functions.https.HttpsError('internal', 'Unable to save design.'); }
-});
 
 // ------------------------------------------------------------------
 // 💰 1. RAZORPAY WEBHOOK (Group Orders, Fraud Check, Invoice)
@@ -2180,173 +1969,6 @@ exports.razorpayWebhook = functions
 
     } catch (error) {
       console.error("Razorpay Processing Error:", error);
-      res.status(500).send("Internal Server Error");
-    }
-  });
-
-// ------------------------------------------------------------------
-// 💰 2. STRIPE WEBHOOK (Group Orders, Fraud Check, Invoice)
-// ------------------------------------------------------------------
-exports.stripeWebhook = functions
-  .runWith({ timeoutSeconds: 300, memory: '1GB', secrets: ["FUNCTIONS_CONFIG_EXPORT"] })
-  .https.onRequest(async (req, res) => {
-    const signature = req.headers['stripe-signature'];
-    const secret = config.value().stripe?.webhook_secret;
-
-    let event;
-
-    // 1. Validate Signature
-    try {
-      event = stripe.webhooks.constructEvent(req.rawBody, signature, secret);
-    } catch (err) {
-      return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-
-    // 2. Idempotency
-    const eventId = event.id;
-    const eventRef = db.collection('webhookEvents').doc(eventId);
-    const doc = await eventRef.get();
-    if (doc.exists) return res.status(200).json({ received: true });
-
-    try {
-      if (event.type === 'payment_intent.succeeded') {
-        const paymentIntent = event.data.object;
-        const groupId = paymentIntent.metadata?.groupId;
-        const amountPaid = paymentIntent.amount_received / 100; // Stripe is in cents
-
-        if (!groupId) return res.status(400).send("Missing groupId");
-
-        // 3. Fetch Group Orders
-        const snapshot = await db.collection("orders").where("groupId", "==", groupId).get();
-        if (snapshot.empty) return res.status(404).send("Orders not found");
-
-        const ordersToUpdate = snapshot.docs;
-        const allOrderData = ordersToUpdate.map(d => d.data());
-
-        // 4. 🛡️ FRAUD CHECK
-        const expectedAmount = allOrderData[0].payment.total;
-        const userId = allOrderData[0].userId;
-
-        if (Math.abs(amountPaid - expectedAmount) > 2) { // 2 unit buffer for currency conversion rounding
-          const fraudMsg = `FRAUD: Group ${groupId} paid ${amountPaid} but expected ${expectedAmount}`;
-          console.error(`🚨 ${fraudMsg}`);
-
-          const fraudBatch = db.batch();
-          ordersToUpdate.forEach(docSnap => {
-            fraudBatch.update(docSnap.ref, {
-              status: 'fraud_alert',
-              fraudReason: fraudMsg,
-              'payment.status': 'fraud_flagged'
-            });
-          });
-
-          if (userId && userId !== 'guest') {
-            fraudBatch.update(db.collection('users').doc(userId), {
-              isBanned: true,
-              banReason: "Payment Tampering / Fraud Attempt",
-              bannedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-          }
-          await fraudBatch.commit();
-          return res.status(200).send("Fraud Detected");
-        }
-
-        if (userId && userId !== 'guest') {
-          try {
-            const launchRef = db.collection('app_settings').doc('launch_status');
-            const userRef = db.collection('users').doc(userId);
-
-            await db.runTransaction(async (t) => {
-              const userDoc = await t.get(userRef);
-              const launchDoc = await t.get(launchRef);
-
-              if (userDoc.exists && launchDoc.exists) {
-                const userData = userDoc.data();
-                const launchData = launchDoc.data();
-
-                if (!userData.isFoundingCreator && launchData.claimed_slots < launchData.total_slots) {
-                  t.update(launchRef, {
-                    claimed_slots: admin.firestore.FieldValue.increment(1)
-                  });
-                  t.update(userRef, {
-                    isFoundingCreator: true
-                  });
-                  console.log(`🎉 User ${userId} claimed Founding Creator slot ${launchData.claimed_slots + 1}!`);
-                }
-              }
-            });
-          } catch (err) {
-            console.error("❌ Founding Creator Transaction Error:", err);
-          }
-        }
-
-        const batch = db.batch();
-        const orderData = allOrderData[0];
-        if (orderData.referralDiscountApplied) {
-          batch.update(db.collection('users').doc(userId), {
-            hasActiveReward: false,
-            referralCount: 0
-          });
-        }
-
-        // 2. Increment Referrer's Count (If this is buyer's first purchase)
-        if (userId && userId !== 'guest') {
-          const userDoc = await db.collection('users').doc(userId).get();
-          if (userDoc.exists) {
-            const userData = userDoc.data();
-            if (userData.referredBy && !userData.hasMadeFirstPurchase) {
-              // Mark buyer as converted
-              batch.update(db.collection('users').doc(userId), { hasMadeFirstPurchase: true });
-
-              // Find the friend who invited them
-              const referrerRef = db.collection('users').doc(userData.referredBy);
-              const referrerDoc = await referrerRef.get();
-
-              if (referrerDoc.exists) {
-                const refData = referrerDoc.data();
-
-                // Only increment if they aren't currently locked
-                if (!refData.hasActiveReward) {
-                  const newCount = (refData.referralCount || 0) + 1;
-
-                  if (newCount >= 3) {
-                    // Trigger the lock and reward!
-                    batch.update(referrerRef, { referralCount: 3, hasActiveReward: true });
-                  } else {
-                    // Just increment progress
-                    batch.update(referrerRef, { referralCount: newCount });
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // 5. ✅ SUCCESS: Batch Update
-        ordersToUpdate.forEach((docSnap) => {
-          if (docSnap.data().status !== 'placed') {
-            batch.update(docSnap.ref, {
-              status: 'placed',
-              'payment.status': 'paid',
-              'payment.transactionId': paymentIntent.id,
-              providerStatus: 'pending', // 🟢 Wakes up your processNewOrder bot!
-              updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-          }
-        });
-        await batch.commit();
-        console.log(`✅ Stripe Group Order ${groupId} successfully paid.`);
-
-        // 6. 🧾 GENERATE INVOICE
-        await generateAndSendConsolidatedInvoice(allOrderData);
-      }
-
-      // Lock Event
-      await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp(), type: event.type });
-      res.status(200).json({ received: true });
-
-    } catch (error) {
-      console.error("Stripe Processing Error:", error);
       res.status(500).send("Internal Server Error");
     }
   });

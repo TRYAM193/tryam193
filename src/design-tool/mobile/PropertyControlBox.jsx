@@ -123,29 +123,36 @@ function liveUpdateFabric(fabricCanvas, id, updates, currentLiveProps, object, e
         return;
     }
 
+    // ✅ FIXED: Better Object Swapping (Matches Toolbar.jsx logic)
+    const isSpecialEffect = ['circle', 'semicircle', 'arc-up', 'arc-down', 'flag'].includes(existing.textEffect) || 
+                            ['circle', 'semicircle', 'arc-up', 'arc-down', 'flag'].includes(updates.textEffect);
+
+    if (isSpecialEffect) {
+        const mergedProps = { ...currentLiveProps, ...updates };
+        const newGroup = CircleText({ id: id, props: mergedProps });
+        
+        // Find existing again to be absolutely sure
+        const toRemove = fabricCanvas.getObjects().find(o => o.customId === id);
+        const index = fabricCanvas.getObjects().indexOf(toRemove);
+        
+        if (toRemove) fabricCanvas.remove(toRemove);
+        
+        fabricCanvas.add(newGroup);
+        if (index > -1) fabricCanvas.moveObjectTo(newGroup, index);
+
+        // Crucial: Maintain selection so the user doesn't lose the slider focus
+        fabricCanvas.setActiveObject(newGroup);
+        newGroup.setCoords();
+        fabricCanvas.requestRenderAll();
+        return;
+    }
+
     existing.set(finalUpdates);
 
     if (existing.type === 'text') {
         if (finalUpdates.text !== undefined || finalUpdates.fontFamily !== undefined || finalUpdates.fontSize !== undefined) {
             existing.initDimensions();
         }
-    }
-
-    const specialEffects = ['circle', 'semicircle', 'arc-up', 'arc-down', 'flag'];
-    const isSpecialEffect = specialEffects.includes(existing.textEffect) || specialEffects.includes(updates.textEffect);
-
-    if (isSpecialEffect) {
-        const mergedProps = { ...currentLiveProps, ...updates };
-        const newGroup = CircleText({ id: id, props: mergedProps });
-        const index = fabricCanvas.getObjects().indexOf(existing);
-        fabricCanvas.remove(existing);
-        fabricCanvas.add(newGroup);
-        if (index > -1) fabricCanvas.moveObjectTo(newGroup, index);
-
-        fabricCanvas.setActiveObject(newGroup);
-        newGroup.setCoords();
-        fabricCanvas.requestRenderAll();
-        return;
     }
 
     existing.setCoords();
@@ -388,7 +395,8 @@ const CustomColorToggle = ({ value, onChange, label = "Custom", object, fabricCa
     const handlePickerChange = (color) => {
         setLocalColor(color);
         // Direct Live Update bypasses Redux for butter-smooth feel
-        if (fabricCanvas && object) {
+        const isValidHex = /^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/.test(color);
+        if (isValidHex && fabricCanvas && object) {
             const currentProps = object.props || object;
             // Determine if we're updating fill or stroke (heuristic)
             const propKey = label.toLowerCase().includes('outline') ? 'stroke' : 'fill';
@@ -433,10 +441,20 @@ const CustomColorToggle = ({ value, onChange, label = "Custom", object, fabricCa
                             <span className="text-[9px] text-slate-500 uppercase font-bold">HEX</span>
                             <input
                                 type="text"
-                                value={safeColor}
+                                value={localColor}
                                 onChange={(e) => {
-                                    handlePickerChange(e.target.value);
-                                    handleCommit(e.target.value);
+                                    let val = e.target.value;
+                                    // Auto-prefix # if user types hex chars without it
+                                    if (val && !val.startsWith('#') && /^[A-Fa-f0-9]{1,6}$/.test(val)) {
+                                        val = '#' + val;
+                                    }
+                                    setLocalColor(val);
+
+                                    const isValidHex = /^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/.test(val);
+                                    if (isValidHex) {
+                                        handlePickerChange(val); // Update Live
+                                        handleCommit(val); // Update Redux
+                                    }
                                 }}
                                 className="bg-transparent text-xs text-white font-mono w-full focus:outline-none"
                             />
@@ -640,13 +658,19 @@ export default function PropertyControlBox({ activeProperty, object, updateObjec
         const currentScaleX = getValue('scaleX') || 1;
         const currentScaleY = getValue('scaleY') || 1;
         console.log(printDimensions)
-        // Use canvas width as proxy for Print Area Width (Standard for this app)
+        // Use actual logical canvas dimensions (visualWidth / zoom)
         const dpiInfo = calculateImageDPI(
-            { ...object, width: object.props.width, height: object.props.height, scaleX: currentScaleX, scaleY: currentScaleY, getScaledWidth: () => object.props.width * currentScaleX, getScaledHeight: () => object.props.height * currentScaleY },
-            fabricCanvas.width,
-            fabricCanvas.height,
-            printDimensions.w,
-            printDimensions.h
+            { 
+                ...object, 
+                originalWidth: object.originalWidth || object.props?.originalWidth,
+                originalHeight: object.originalHeight || object.props?.originalHeight,
+                getScaledWidth: () => (object.props?.width || object.width || 0) * currentScaleX, 
+                getScaledHeight: () => (object.props?.height || object.height || 0) * currentScaleY 
+            },
+            fabricCanvas.width / fabricCanvas.getZoom(),
+            fabricCanvas.height / fabricCanvas.getZoom(),
+            printDimensions.w || 4500,
+            printDimensions.h || 5400
         );
 
         if (dpiInfo && dpiInfo.dpi < 300) {

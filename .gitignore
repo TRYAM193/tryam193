@@ -25,3 +25,5 @@ dist-ssr
 scripts
 .vercel
 .config.json
+/functions
+/python-backend

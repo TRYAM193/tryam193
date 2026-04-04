@@ -383,8 +383,8 @@ export default function EditorPanel() {
 
         const info = calculateImageDPI(
             obj,
-            fabricCanvas.width,
-            fabricCanvas.height,
+            fabricCanvas.width / fabricCanvas.getZoom(),
+            fabricCanvas.height / fabricCanvas.getZoom(),
             printArea.width,
             printArea.height
         );
@@ -444,7 +444,7 @@ export default function EditorPanel() {
             const printArea = productData?.print_areas?.[currentView] || { width: 4500, height: 5400 };
 
             images.forEach(img => {
-                const info = calculateImageDPI(img, fabricCanvas.width, fabricCanvas.height, printArea.width, printArea.height);
+                const info = calculateImageDPI(img, fabricCanvas.width / fabricCanvas.getZoom(), fabricCanvas.height / fabricCanvas.getZoom(), printArea.width, printArea.height);
                 if (info) {
                     newRegistry[img.customId || img.id] = { id: img.customId || img.id, src: img.getSrc(), ...info };
                 }

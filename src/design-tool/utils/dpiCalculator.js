@@ -1,5 +1,3 @@
-// src/design-tool/utils/dpiCalculator.js
-
 export const calculateImageDPI = (
     fabricObject,
     canvasWidth,
@@ -8,37 +6,46 @@ export const calculateImageDPI = (
     printAreaHeightPx
 ) => {
     // 1. Safety Checks
-    if (!fabricObject || fabricObject.type !== 'image') return null;
+    if (!fabricObject || (fabricObject.type !== 'image' && fabricObject.type !== 'i-text' && fabricObject.type !== 'textbox')) return null;
     if (!canvasWidth || !canvasHeight || !printAreaWidthPx || !printAreaHeightPx) return null;
 
-    // 👇 2. THE FIX: Get the "Source of Truth" from the hidden metadata first!
-    // We check if we stored the massive original dimensions during upload. 
-    // If not, we fall back to the standard fabric object width.
-    const sourceWidth = fabricObject.originalWidth || fabricObject.width;
-    const sourceHeight = fabricObject.originalHeight || fabricObject.height;
-    console.log(fabricObject)
+    // 2. High-Res Source of Truth
+    // If the object is an image, we use its original pixel dimensions for accurate DPI.
+    // If it's text, we can conceptually treat it as infinity, but usually, this tool is for images.
+    const sourceWidth = fabricObject.originalWidth || (fabricObject.props?.width || fabricObject.width);
+    const sourceHeight = fabricObject.originalHeight || (fabricObject.props?.height || fabricObject.height);
 
-    // 3. Get the "Target Spread" (The Size on the Canvas in LOGICAL pixels)
-    // In FabricJS, getScaledWidth() = width * scaleX. This is unzoomed! 
-    // It remains exactly the same on Mobile and Desktop, representing the Print Area space.
-    const logicalPixelWidth = fabricObject.getScaledWidth();
-    const logicalPixelHeight = fabricObject.getScaledHeight();
+    if (!sourceWidth || !sourceHeight) return null;
 
-    // 4. Calculate Physical Dimensions of the Image on the Shirt
-    // Since the canvas is natively created representing the Print Area at exactly 300 PPI, 
-    // a logical pixel ALWAYS represents 1/300th of a physical inch!
-    const physicalObjectW = logicalPixelWidth / 300;
-    const physicalObjectH = logicalPixelHeight / 300;
+    // 3. Normalize the "Logical Width" to the High-Res Print Area space
+    // Fabric objects might report width in logical units (0-4500) or screen units (0-900).
+    // We calibrate by checking how much of the canvas they cover.
+    
+    // getScaledWidth() on a real Fabric object returns visual width including canvas zoom?
+    // To be platform-agnostic, we use the canvasWidth provided to the utility.
+    const scaledWidth = fabricObject.getScaledWidth();
+    const scaledHeight = fabricObject.getScaledHeight();
 
-    // 5. Calculate DPI (Dots Per Inch)
-    // Formula: Raw Source Pixels / Physical Inches
+    // 4. Calculate Percentage of the Canvas covered
+    const coverageX = scaledWidth / canvasWidth;
+    const coverageY = scaledHeight / canvasHeight;
+
+    // 5. Translate that coverage to Physical Inches in the Output
+    // Standard Print Area Width at 300 PPI is (printAreaWidthPx / 300) inches.
+    const physicalPrintAreaW = printAreaWidthPx / 300;
+    const physicalPrintAreaH = printAreaHeightPx / 300;
+
+    const physicalObjectW = coverageX * physicalPrintAreaW;
+    const physicalObjectH = coverageY * physicalPrintAreaH;
+
+    // 6. Calculate DPI (Dots Per Inch)
+    // Formula: Source Pixels / Physical Inches
     const dpiX = sourceWidth / (physicalObjectW || 1);
     const dpiY = sourceHeight / (physicalObjectH || 1);
 
-    // 6. Safety: Take the lowest DPI
     const finalDpi = Math.round(Math.min(dpiX, dpiY));
 
-    // 8. Determine Status
+    // 7. Determine Status
     let status = 'good';
     let color = '#22c55e'; // Green
     let message = 'Great Quality';

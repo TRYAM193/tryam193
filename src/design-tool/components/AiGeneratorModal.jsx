@@ -6,6 +6,7 @@ import { FiLoader, FiCpu, FiZap } from 'react-icons/fi';
 import { generateDesignJsonFromPrompt } from '../utils/aiService';
 import { useDailyLimits } from '../../hooks/useDailyLimits';
 import { Loader2, Sparkles, Lock, ImagePlus, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 const STYLES = [
   { id: 'none', label: 'No Style', icon: '🚫' },
@@ -17,7 +18,7 @@ const STYLES = [
   { id: 'streetwear bold text', label: 'Streetwear', icon: '🔥' },
 ];
 
-export function AiGeneratorModal({ isOpen, onClose, onDesignGenerated, fabricCanvas, productId, onGenerateStart, onGenerateEnd }) {
+export function AiGeneratorModal({ isOpen, onClose, onDesignGenerated, fabricCanvas, productId, onGenerateStart, onGenerateEnd, onGenerateProgress }) {
   const [prompt, setPrompt] = useState('');
   const [selectedStyle, setSelectedStyle] = useState('none');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -98,12 +99,28 @@ export function AiGeneratorModal({ isOpen, onClose, onDesignGenerated, fabricCan
     if (onGenerateStart) {
       onGenerateStart();
     }
-    onClose();
+
+    const STEPS = [
+      "Consulting the Stars...",
+      "Analyzing your prompt & references...",
+      "Harmonizing colors & typography...",
+      "Constructing vector paths...",
+      "Aligning geometry...",
+      "Finalizing layout design..."
+    ];
+    let stepIndex = 0;
+    const progressInterval = setInterval(() => {
+      stepIndex++;
+      if (stepIndex < STEPS.length) {
+        if (onGenerateProgress) onGenerateProgress(STEPS[stepIndex]);
+      }
+    }, 1500);
 
     try {
       const cWidth = fabricCanvas ? fabricCanvas.width : 800;
       const cHeight = fabricCanvas ? fabricCanvas.height : 800;
       const pInfo = productId ? `product ID: ${productId}` : "a blank canvas";
+      
       const designJson = await generateDesignJsonFromPrompt(prompt, selectedStyle, cWidth, cHeight, pInfo, referenceImages);
 
       onDesignGenerated(designJson);
@@ -111,12 +128,19 @@ export function AiGeneratorModal({ isOpen, onClose, onDesignGenerated, fabricCan
 
       setPrompt('');
       setReferenceImages([]);
+
+      clearInterval(progressInterval);
+      setIsGenerating(false);
+
+      if (onGenerateEnd) onGenerateEnd();
+      else onClose();
+
     } catch (err) {
       console.error(err);
-      setError('Failed to generate. Please try again.');
-    } finally {
+      toast.error('Cosmic AI failed to generate design. Please try again.');
+      clearInterval(progressInterval);
       setIsGenerating(false);
-      if (onGenerateEnd) onGenerateEnd();
+      if (onGenerateEnd) onGenerateEnd(); // Clean up loaders
     }
   };
 

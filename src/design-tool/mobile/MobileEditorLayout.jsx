@@ -223,10 +223,23 @@ export default function MobileEditorLayout({
 
             {/* 4. OTHER COMPONENTS */}
             {productProps.id && !selectedId && !activePanel && availableViews.length > 1 && (
-                <div className="absolute bottom-[130px] left-1/2 -translate-x-1/2 z-20 flex gap-1 p-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 shadow-xl">
-                    {availableViews.map(view => (
-                        <button key={view} onClick={() => onSwitchView(view)} className={`px-4 py-1.5 rounded-full text-xs font-bold capitalize transition-all ${currentView === view ? 'bg-white text-black shadow-md' : 'text-white/70 hover:bg-white/10'}`}>
-                            {view}
+                <div className="absolute bottom-[130px] left-1/2 -translate-x-1/2 z-20 flex p-1.5 rounded-full bg-black/60 backdrop-blur-2xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
+                    {[...availableViews]
+                        .sort((a, b) => {
+                            const order = { 'front': 1, 'left_chest': 2, 'back': 3, 'right_chest': 4 };
+                            return (order[a] || 99) - (order[b] || 99);
+                        })
+                        .map(view => (
+                        <button 
+                            key={view} 
+                            onClick={() => onSwitchView(view)} 
+                            className={`px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all duration-300 ${
+                                currentView === view 
+                                    ? "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.4)]" 
+                                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                            }`}
+                        >
+                            {view.replace('_', ' ')}
                         </button>
                     ))}
                 </div>

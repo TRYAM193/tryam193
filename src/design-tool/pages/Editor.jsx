@@ -1261,7 +1261,7 @@ export default function EditorPanel() {
                             onMergeTemplate={handleMergeTemplate}
                             onReplaceTemplate={handleReplaceTemplate}
                             onAiObjectsGenerated={handleAiObjectsGenerated}
-                            onAiGenerateStart={() => handleAiLoadingStart('Cosmic AI is Designing...', 'Summoning geometry, typography, and colors from the void.')}
+                            onAiGenerateStart={(title, subtitle) => handleAiLoadingStart(title || 'Cosmic AI is Designing...', subtitle || 'Summoning geometry, typography, and colors from the void.')}
                             onAiGenerateEnd={handleAiLoadingEnd}
                             onAiLoadingStart={handleAiLoadingStart}
                             onAiLoadingEnd={handleAiLoadingEnd}
@@ -1270,12 +1270,24 @@ export default function EditorPanel() {
 
                     <main className="preview-area relative bg-transparent flex items-center justify-center overflow-hidden gap-2" ref={containerRef}>
                         {productData.print_areas && Object.keys(productData.print_areas).length > 1 && (
-                            <div className="absolute top-152 left-[40%] -translate-x-1/2 z-20 flex gap-2 bg-slate-800/80 p-1.5 rounded-full border border-white/10 shadow-lg backdrop-blur-md">
-                                {Object.keys(productData.print_areas).map(view => (
-                                    <button key={view} onClick={() => handleSwitchView(view)} className={`px-4 py-1 rounded-full text-xs font-bold capitalize transition-all ${currentView === view ? "bg-orange-600 text-white shadow-orange-900/50" : "text-slate-400 hover:text-white hover:bg-white/5"}`}>
-                                        {view.replace('_', ' ')}
-                                    </button>
-                                ))}
+                            <div className="fixed bottom-[8vh] left-[43vw] -translate-x-1/2 z-50 flex p-1.5 bg-black/60 backdrop-blur-2xl rounded-full border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.6)] pointer-events-auto">
+                                {Object.keys(productData.print_areas)
+                                    .sort((a, b) => {
+                                        const order = { 'front': 1, 'left_chest': 2, 'back': 3, 'right_chest': 4, };
+                                        return (order[a] || 99) - (order[b] || 99);
+                                    })
+                                    .map(view => (
+                                        <button
+                                            key={view}
+                                            onClick={() => handleSwitchView(view)}
+                                            className={`px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-300 ${currentView === view
+                                                ? "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.4)]"
+                                                : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                                }`}
+                                        >
+                                            {view.replace('_', ' ')}
+                                        </button>
+                                    ))}
                             </div>
                         )}
 
@@ -1625,7 +1637,7 @@ export default function EditorPanel() {
                                 onMergeTemplate={handleMergeTemplate}
                                 onReplaceTemplate={handleReplaceTemplate}
                                 onAiObjectsGenerated={handleAiObjectsGenerated}
-                                onAiGenerateStart={() => handleAiLoadingStart('Cosmic AI is Designing...', 'Summoning geometry, typography, and colors from the void.')}
+                                onAiGenerateStart={(title, subtitle) => handleAiLoadingStart(title || 'Cosmic AI is Designing...', subtitle || 'Summoning geometry, typography, and colors from the void.')}
                                 onAiGenerateEnd={handleAiLoadingEnd}
                                 onAiLoadingStart={handleAiLoadingStart}
                                 onAiLoadingEnd={handleAiLoadingEnd}

@@ -7,7 +7,7 @@ import {
     FiType, FiImage, FiCpu, FiSquare, FiTool, FiFolder,
     FiBell, FiAlertTriangle, FiCheckCircle, FiInfo, FiX, FiZap
 } from 'react-icons/fi';
-import { Loader2, Sparkles, ImagePlusIcon, Layout } from 'lucide-react'; // 👈 Import Loader
+import { Loader2, Sparkles, ImagePlusIcon, Layout, PenLine, QrCode } from 'lucide-react'; // 👈 Import Loader
 import Image from '../objectAdders/Image'
 import addSvgToRedux from '../objectAdders/Svg';
 import updateObject from '../functions/update';
@@ -104,8 +104,22 @@ export default function MainToolbar({
         setIsFixing(issue.id);
         if (onAiLoadingStart) onAiLoadingStart('Enhancing Image...', 'The Cosmic AI is upscaling and sharpening the details.');
 
+        const STEPS = [
+            "The Cosmic AI is upscaling and sharpening the details.",
+            "Analyzing pixel structures...",
+            "Applying neural enhancement...",
+            "Denoising and color correcting...",
+            "Finalizing high-resolution image..."
+        ];
+        let stepIndex = 0;
+        const progressInterval = setInterval(() => {
+            stepIndex++;
+            if (stepIndex < STEPS.length) {
+                if (onAiLoadingStart) onAiLoadingStart('Enhancing Image...', STEPS[stepIndex]);
+            }
+        }, 1500);
+
         try {
-            // 1. Get the Blob (Temporary)
             const tempBlobUrl = await processUpscale(issue.src);
 
             if (tempBlobUrl && fabricCanvas) {
@@ -141,6 +155,7 @@ export default function MainToolbar({
             console.error("Fix failed:", error);
             toast.error("Failed to save enhanced image")
         } finally {
+            clearInterval(progressInterval);
             setIsFixing(null);
             if (onAiLoadingEnd) onAiLoadingEnd();
         }
@@ -180,7 +195,7 @@ export default function MainToolbar({
             <ImageHandler setSelectedId={setSelectedId} storageFolder={storageFolder} setActiveTool={onSelectTool} className={`tool-button-wrapper ${activePanel === 'image' ? 'active' : ''}`} fabricCanvas={fabricCanvas}>
                 <ImagePlusIcon size={24} /> <span>Image</span>
             </ImageHandler>
-            {isAdmin && (  // Check if current user is you/admin
+            {/* {isAdmin && (  // Check if current user is you/admin
                 <button onClick={handleClick}>
                     <ImagePlusIcon size={24} />
                     <input type="file" ref={fileInput} onChange={handleImage} style={{ display: 'none' }} accept="image/*" />
@@ -196,13 +211,14 @@ export default function MainToolbar({
                         <span className='text-xs text-slate-600'>Admin SVG</span>
                     </button>
                 </>
-            )}
+            )} */}
             <ToolButton icon={FiSquare} label="Shapes" isActive={activePanel === 'shapes'} onClick={() => onSelectTool('shapes')} />
             <ToolButton icon={Sparkles} label="Graphics" isActive={activePanel === 'graphics'} onClick={() => onSelectTool('graphics')} />
             <ToolButton icon={Layout} label='Templates' isActive={activePanel === 'templates'} onClick={() => onSelectTool('templates')} />
             <ToolButton icon={FiCpu} label="AI" isActive={activePanel === 'ai'} onClick={() => onSelectTool('ai')} />
             <hr className="toolbar-divider" />
-            <ToolButton icon={FiTool} label="More" isActive={activePanel === 'more'} onClick={() => onSelectTool('more')} />
+            <ToolButton icon={PenLine} label="Draw" isActive={activePanel === 'draw'} onClick={() => onSelectTool('draw')} />
+            <ToolButton icon={QrCode} label="QR Code" isActive={activePanel === 'qrcode'} onClick={() => onSelectTool('qrcode')} />
 
 
             <div className="flex-grow" />

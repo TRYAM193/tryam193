@@ -7,6 +7,8 @@ import { AiGeneratorModal } from './AiGeneratorModal';
 import { FiCpu, FiType, FiUploadCloud, FiX } from 'react-icons/fi';
 import LayersPanel from './LayersPanel';
 import SidebarTemplateList from './SidebarTemplateList';
+import DrawingPanel from './DrawingPanel';
+import QrCodePanel from './QrCodePanel';
 
 export default function ContextualSidebar({ 
   activePanel, setActivePanel, addText, addHeading, addSubheading, 
@@ -120,6 +122,14 @@ export default function ContextualSidebar({
       title = "Templates";
       content = <SidebarTemplateList onMerge={onMergeTemplate} onReplace={onReplaceTemplate} />;
       break;
+    case 'draw':
+      title = "Drawing Tools";
+      content = <DrawingPanel fabricCanvas={fabricCanvas} setActivePanel={setActivePanel} />;
+      break;
+    case 'qrcode':
+      title = "QR Code";
+      content = <QrCodePanel fabricCanvas={fabricCanvas} setActivePanel={setActivePanel} />;
+      break;
     default:
       content = null;
       title = "";
@@ -150,9 +160,14 @@ export default function ContextualSidebar({
         onGenerateStart={() => {
           setIsAiModalOpen(false);
           setActivePanel(null);
-          if (onAiGenerateStart) onAiGenerateStart();
+          if (onAiGenerateStart) onAiGenerateStart('Cosmic AI is Designing...', 'Consulting the Stars...');
         }}
-        onGenerateEnd={onAiGenerateEnd}
+        onGenerateProgress={(subtitle) => {
+          if (onAiGenerateStart) onAiGenerateStart('Cosmic AI is Designing...', subtitle);
+        }}
+        onGenerateEnd={() => {
+          if (onAiGenerateEnd) onAiGenerateEnd();
+        }}
       />
     </aside>
   );

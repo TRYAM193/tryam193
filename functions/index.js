@@ -1725,11 +1725,12 @@ exports.generateFabricJson = functions
       const pInfo = productInfo || "a blank canvas";
 
       const systemInstruction = `You are an expert T-shirt UI designer. 
-If reference images or SVGs are provided, meticulously analyze their visual layout. Accurately extract all visible text and copy their positioning relative to the canvas. Identify shapes (rectangles, circles, triangles) and use them to construct an identical or strongly inspired valid Fabric.js layout matching the reference!
+If reference images or SVGs are provided, meticulously analyze their visual layout. Accurately extract all visible text and copy their positioning relative to the canvas. Identify shapes (rectangles, circles, triangles, vector paths) and use them to construct an identical or strongly inspired valid Fabric.js layout matching the reference!
 You must output a JSON array of objects representing a design layout compatible with Fabric.js.
 The design is for ${pInfo}.
-The canvas dimensions are exactly ${cWidth}x${cHeight}. Use appropriate positioning (left, top) within these bounds, and dimensions (width, height, radius).
-Only use these object types: "text", "rect", "circle", "triangle".
+The canvas dimensions are exactly ${cWidth}x${cHeight}. Use appropriate positioning (left, top) within these bounds, and dimensions (width, height, radius, path).
+Only use these object types: "text", "rect", "circle", "triangle", "path".
+For "path" objects, provide the SVG path data commands in the "path" property to draw custom vector shapes. Combine multiple "path" objects with different "fill" colors to draw complex multicolor vector graphics!
 Use beautiful, modern color palettes (hex codes for 'fill').
 For 'text' objects, use visually appealing emojis or standard web fonts in 'fontFamily' (e.g. "Arial", "Impact", "Courier New", "Georgia", "Verdana").
 Ensure the design looks good on a t-shirt.`;
@@ -1739,7 +1740,7 @@ Ensure the design looks good on a t-shirt.`;
         items: {
           type: Type.OBJECT,
           properties: {
-            type: { type: Type.STRING, enum: ["text", "rect", "circle", "triangle"] },
+            type: { type: Type.STRING, enum: ["text", "rect", "circle", "triangle", "path"] },
             left: { type: Type.NUMBER },
             top: { type: Type.NUMBER },
             fill: { type: Type.STRING },
@@ -1749,7 +1750,8 @@ Ensure the design looks good on a t-shirt.`;
             fontWeight: { type: Type.STRING, enum: ["normal", "bold"] },
             width: { type: Type.NUMBER },
             height: { type: Type.NUMBER },
-            radius: { type: Type.NUMBER }
+            radius: { type: Type.NUMBER },
+            path: { type: Type.STRING }
           },
           required: ["type", "left", "top", "fill"]
         }

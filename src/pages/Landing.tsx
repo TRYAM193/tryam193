@@ -77,7 +77,7 @@ export default function Landing() {
           {/* Desktop Navigation */}
           {/* Desktop Navigation (> 768px) */}
           <nav className="hidden md:flex items-center gap-8">
-            {[{ label: "Catalog", to: "/store" }, { label: "Designs", to: "/designs" }, { label: "About", to: "/about" }, { label: "Help", to: "/help" }, { label: "Contact", to: "/contact" }].map((item) => (
+            {[{ label: "Catalog", to: "/store" }, { label: "Designs", to: "/templates" }, { label: "About", to: "/about" }, { label: "Help", to: "/help" }, { label: "Contact", to: "/contact" }].map((item) => (
               <Link key={item.label} to={item.to} className="text-sm font-medium text-slate-300 hover:text-orange-400 transition-colors relative group">
                 {item.label}
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-orange-500 transition-all group-hover:w-full" />

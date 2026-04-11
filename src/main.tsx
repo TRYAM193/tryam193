@@ -65,7 +65,7 @@ const router = createBrowserRouter(
       <Route path="/store" element={<Storefront />} />
       <Route path="/product/:productId" element={<ProductDetails />} />
       <Route path="/terms" element={<TermsConditions />} />
-      <Route path="/templates" element={<TemplatesPage />} />
+      <Route path="/designs" element={<TemplatesPage />} />
       <Route path="/design/*" element={<DesignEditorPage />} />
 
       <Route element={<ProtectedRoute />}>

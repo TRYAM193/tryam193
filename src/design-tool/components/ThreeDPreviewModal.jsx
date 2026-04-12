@@ -111,7 +111,7 @@ export function ThreeDPreviewModal({
                 <div className="relative flex flex-col w-full h-full z-10 border border-white/10 sm:rounded-2xl overflow-hidden ring-1 ring-white/5">
                     {/* --- HEADER --- */}
                     <div className="h-16 border-b border-white/5 flex items-center justify-between px-2 sm:px-6 bg-white/5 backdrop-blur-md z-30 flex-shrink-0 shadow-sm">
-                        
+
                         {/* Live Badge (Responsive) */}
                         <div className="w-[15%] sm:w-1/4 flex items-center justify-start pl-2 sm:pl-0">
                             {/* Desktop Full Badge */}
@@ -165,7 +165,7 @@ export function ThreeDPreviewModal({
                             {viewMode === '2d' && (
                                 <div className="relative w-full h-full flex flex-col">
                                     <div className="flex-1 flex items-center no-scrollbar justify-center relative p-8 sm:p-12 overflow-auto">
-                                        
+
                                         {/* Cinematic Studio Backdrop Overlay */}
                                         <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/5 via-transparent to-transparent opacity-80" />
 
@@ -240,10 +240,10 @@ export function ThreeDPreviewModal({
                                                     <div
                                                         className="absolute z-20 overflow-hidden"
                                                         style={{
-                                                            top: `${adjustments.top - 1}%`,
-                                                            left: `${adjustments.left - 3}%`,
-                                                            width: `${adjustments.width + 5}%`,
-                                                            height: `${adjustments.height + 2}%`,
+                                                            top: `${adjustments.top}%`,
+                                                            left: `${adjustments.left}%`,
+                                                            width: `${adjustments.width}%`,
+                                                            height: `${adjustments.height}%`,
                                                         }}
                                                     >
                                                         {isMug ? (
@@ -300,11 +300,10 @@ export function ThreeDPreviewModal({
                                                     <button
                                                         key={side}
                                                         onClick={() => setActiveSide(side)}
-                                                        className={`px-8 py-2.5 rounded-full text-[11px] sm:text-xs font-bold uppercase tracking-[0.15em] transition-all duration-300 ${
-                                                            activeSide === side 
-                                                                ? "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-[0_0_25px_rgba(249,115,22,0.4)]" 
-                                                                : "text-zinc-500 hover:text-white hover:bg-white/5"
-                                                        }`}
+                                                        className={`px-8 py-2.5 rounded-full text-[11px] sm:text-xs font-bold uppercase tracking-[0.15em] transition-all duration-300 ${activeSide === side
+                                                            ? "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-[0_0_25px_rgba(249,115,22,0.4)]"
+                                                            : "text-zinc-500 hover:text-white hover:bg-white/5"
+                                                            }`}
                                                     >
                                                         {side.replace('_', ' ')}
                                                     </button>

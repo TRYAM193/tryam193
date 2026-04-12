@@ -433,24 +433,24 @@ export default function Toolbar({ id, type, object, updateObject, updateDpiForOb
     if (!object || type !== 'image' || !fabricCanvas || isRemovingBg) return;
     const currentSrc = object.props.src || '';
     if (!currentSrc) { alert('No image source found!'); return; }
-    
+
     let progressInterval;
     try {
       setIsRemovingBg(true);
       if (onAiLoadingStart) onAiLoadingStart('Removing Background...', 'The Cosmic AI is separating the subject from the void.');
-      
+
       const STEPS = [
-          "The Cosmic AI is separating the subject from the void.",
-          "Detecting foreground objects...",
-          "Refining edge boundaries...",
-          "Applying alpha masking..."
+        "The Cosmic AI is separating the subject from the void.",
+        "Detecting foreground objects...",
+        "Refining edge boundaries...",
+        "Applying alpha masking..."
       ];
       let stepIndex = 0;
       progressInterval = setInterval(() => {
-          stepIndex++;
-          if (stepIndex < STEPS.length) {
-              if (onAiLoadingStart) onAiLoadingStart('Removing Background...', STEPS[stepIndex]);
-          }
+        stepIndex++;
+        if (stepIndex < STEPS.length) {
+          if (onAiLoadingStart) onAiLoadingStart('Removing Background...', STEPS[stepIndex]);
+        }
       }, 2000);
 
       const newImageUrl = await processBackgroundRemoval(currentSrc);

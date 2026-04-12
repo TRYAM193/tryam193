@@ -21,6 +21,11 @@ export const INITIAL_PRODUCTS = [
       height: 480
     },
 
+    print_area_2d: {
+      front: { top: 29, left: 34.5, width: 31.5, height: 36 },
+      back: { top: 29, left: 34.5, width: 31.5, height: 36 }
+    },
+
     variants: {
       qikink: {
         colors: [
@@ -108,10 +113,6 @@ export const INITIAL_PRODUCTS = [
       back: "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/mockups%2Ftshirt%2Fmen-classic-tee-back.png?alt=media&token=1aff134c-b429-4b20-8223-f5e9c4b655d5"
     },
 
-    print_area_2d: {
-      front: { top: 29, left: 32.5, width: 35, height: 39 },
-      back: { top: 29, left: 32.5, width: 35, height: 39 }
-    },
 
     vendor_maps: {
       printify: {
@@ -174,7 +175,7 @@ export const INITIAL_PRODUCTS = [
     "print_area_2d": {
       "left_chest": { "top": 28, "left": 27, "width": 20, "height": 20 },
       "right_chest": { "top": 28, "left": 56, "width": 20, "height": 20 },
-      back: { top: 31, left: 32.5, width: 37, height: 43 }
+      back: { top: 31, left: 32.5, width: 37.8, height: 48.6 }
     },
 
     "variants": {
@@ -295,8 +296,8 @@ export const INITIAL_PRODUCTS = [
     },
 
     print_area_2d: {
-      front: { top: 29, left: 32.5, width: 36, height: 39 },
-      back: { top: 29, left: 32.5, width: 36, height: 39 }
+      front: { top: 26, left: 32.5, width: 36, height: 45 },
+      back: { top: 29, left: 32.5, width: 36, height: 45 }
     },
 
     vendor_maps: {
@@ -404,8 +405,8 @@ export const INITIAL_PRODUCTS = [
     },
 
     print_area_2d: {
-      front: { top: 32, left: 33.5, width: 33.5, height: 24.5 },
-      back: { top: 39, left: 32, width: 37, height: 31 }
+      front: { top: 28, left: 36.5, width: 27, height: 32.4 },
+      back: { top: 29, left: 32, width: 37.8, height: 45.9 }
     },
 
     options: {
@@ -448,8 +449,8 @@ export const INITIAL_PRODUCTS = [
     },
 
     mockups: {
-      front: "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/mockups%2Ftshirt%2Fwomen-classic-tee-front.png?alt=media&token=72509783-e813-42b5-a84b-44374c5ec21f",
-      back: "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/mockups%2Ftshirt%2Fwomen-classic-tee-back.png?alt=media&token=427e37fd-13c8-4302-8bf5-d1f4c000adc6"
+      front: "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/mockups%2Ftshirt%2Fwomen-classic-tee-front.png?alt=media&token=b89b1e95-6b9b-4a68-89c1-1fbc63eb4169",
+      back: "https://firebasestorage.googleapis.com/v0/b/tryam-5bff4.firebasestorage.app/o/mockups%2Ftshirt%2Fwomen-classic-tee-back.png?alt=media&token=30a433cd-053f-4c6e-bba7-64394cfd03d2"
     },
 
     canvas_size: {
@@ -521,8 +522,8 @@ export const INITIAL_PRODUCTS = [
     },
 
     print_area_2d: {
-      front: { top: 29, left: 32.5, width: 35, height: 39 },
-      back: { top: 29, left: 32.5, width: 35, height: 39 }
+      front: { top: 28, left: 27.5, width: 35.7, height: 36.975 },
+      back: { top: 21, left: 28.5, width: 35.1, height: 44.55 }
     },
 
     vendor_maps: {
@@ -650,7 +651,7 @@ export const INITIAL_PRODUCTS = [
     },
 
     print_area_2d: {
-      front: { top: 43, left: 29, width: 40.5, height: 33.5 },
+      front: { top: 43, left: 36, width: 30, height: 36 },
     },
 
     variants: {

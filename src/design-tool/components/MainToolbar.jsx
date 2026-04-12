@@ -195,7 +195,7 @@ export default function MainToolbar({
             <ImageHandler setSelectedId={setSelectedId} storageFolder={storageFolder} setActiveTool={onSelectTool} className={`tool-button-wrapper ${activePanel === 'image' ? 'active' : ''}`} fabricCanvas={fabricCanvas}>
                 <ImagePlusIcon size={24} /> <span>Image</span>
             </ImageHandler>
-            {/* {isAdmin && (  // Check if current user is you/admin
+            {isAdmin && (  // Check if current user is you/admin
                 <button onClick={handleClick}>
                     <ImagePlusIcon size={24} />
                     <input type="file" ref={fileInput} onChange={handleImage} style={{ display: 'none' }} accept="image/*" />
@@ -211,7 +211,7 @@ export default function MainToolbar({
                         <span className='text-xs text-slate-600'>Admin SVG</span>
                     </button>
                 </>
-            )} */}
+            )}
             <ToolButton icon={FiSquare} label="Shapes" isActive={activePanel === 'shapes'} onClick={() => onSelectTool('shapes')} />
             <ToolButton icon={Sparkles} label="Graphics" isActive={activePanel === 'graphics'} onClick={() => onSelectTool('graphics')} />
             <ToolButton icon={Layout} label='Templates' isActive={activePanel === 'templates'} onClick={() => onSelectTool('templates')} />
